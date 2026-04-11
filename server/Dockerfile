@@ -2,6 +2,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# Fix: OpenSSL requerido por Prisma en Alpine
+RUN apk add --no-cache openssl openssl-dev libc6-compat
+
 # Install dependencies
 COPY package*.json ./
 RUN npm install
