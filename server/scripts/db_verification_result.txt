@@ -1,0 +1,34 @@
+
+========== VERIFICACIÓN DE BASE DE DATOS ==========
+
+✅ Total de Etiquetas: 29
+
+📋 Primeras 5 etiquetas:
+   - Antigripal (Tipo: terapeutica, Activo: true)
+   - Jarabe para la tos (Tipo: terapeutica, Activo: true)
+   - Antibiótico (Tipo: terapeutica, Activo: true)
+   - Antiinflamatorio (Tipo: terapeutica, Activo: true)
+   - Antidiabético (Tipo: terapeutica, Activo: true)
+
+✅ Total de Reglas de Venta Cruzada: 17
+
+📋 Primeras 3 reglas:
+   1. Disparador: ID 1 (etiqueta) → Sugerencia: ID 13 (etiqueta)
+      Mensaje: "Para ayudar a subir las defensas y recuperarse más rápido…"
+      Prioridad: 8, Activo: true
+   2. Disparador: ID 1 (etiqueta) → Sugerencia: ID 14 (etiqueta)
+      Mensaje: "Para ayudar a subir las defensas y recuperarse más rápido…"
+      Prioridad: 7, Activo: true
+   3. Disparador: ID 2 (etiqueta) → Sugerencia: ID 15 (etiqueta)
+      Mensaje: "Para evitar la irritación de la nariz…"
+      Prioridad: 7, Activo: true
+
+✅ Total de Relaciones Producto-Etiqueta: 0
+✅ Total de Productos: 3
+✅ Productos con Principio Activo: 2
+
+📋 Ejemplos de productos auto-etiquetados:
+   - DOLOIBUPRESS FORTE (IBUPROFENO + PARACETAMOL)
+   - CLOTRIMAZOL (CLOTRIMAZOL)
+
+✅ ¡Base de datos verificada exitosamente!

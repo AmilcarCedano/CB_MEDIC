@@ -1,0 +1,640 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model ReglaVentaCruzada {
+  id                 Int       @id @default(autoincrement())
+  farmaciaId         Int       @default(0)
+  triggerProductoId  Int
+  sugeridoProductoId Int
+  prioridad          Int       @default(5) @db.TinyInt
+  mensaje            String    @db.VarChar(255)
+  activo             Boolean   @default(true)
+  createdAt          DateTime? @default(now()) @db.Timestamp(0)
+  sugeridoProducto   producto  @relation("SugeridoProducto", fields: [sugeridoProductoId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_regla_sugerido")
+  triggerProducto    producto  @relation("TriggerProducto", fields: [triggerProductoId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_regla_trigger")
+
+  @@unique([farmaciaId, triggerProductoId, sugeridoProductoId], name: "uk_regla_producto", map: "uk_regla_producto")
+  @@index([sugeridoProductoId], map: "idx_sugerido_producto")
+  @@index([triggerProductoId], map: "idx_trigger_producto")
+  @@map("reglas_venta_cruzada")
+}
+
+model ConfiguracionLealtad {
+  id            Int       @id @default(autoincrement())
+  farmaciaId    Int       @unique(map: "farmaciaId")
+  solesPorPunto Decimal   @default(10.00) @db.Decimal(10, 2)
+  valorPorPunto Decimal   @default(0.10) @db.Decimal(10, 2)
+  maxPuntosCanje Int       @default(0)
+  activo         Boolean   @default(true)
+  updatedAt     DateTime? @default(now()) @updatedAt @db.Timestamp(0)
+  farmacia      farmacia  @relation(fields: [farmaciaId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_cl_farmacia")
+
+  @@map("configuracion_lealtad")
+}
+
+model promocion {
+  id          Int             @id @default(autoincrement())
+  farmaciaId  Int
+  nombre      String          @db.VarChar(200)
+  descripcion String?         @db.Text
+  precioPromo Decimal         @db.Decimal(10, 2)
+  activo      Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  farmacia    farmacia        @relation(fields: [farmaciaId], references: [id], onDelete: Cascade)
+  items       promocionitem[]
+
+  @@index([farmaciaId])
+  @@map("promocion")
+}
+
+model promocionitem {
+  id          Int       @id @default(autoincrement())
+  promocionId Int
+  productoId  Int
+  cantidad    Int       @default(1)
+  promocion   promocion @relation(fields: [promocionId], references: [id], onDelete: Cascade)
+  producto    producto  @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@index([promocionId])
+  @@index([productoId])
+  @@map("promocion_item")
+}
+
+
+model caja {
+  id            Int       @id @default(autoincrement())
+  farmaciaId    Int
+  usuarioId     Int
+  openedAt      DateTime  @default(now())
+  closedAt      DateTime?
+  openingAmount Decimal   @db.Decimal(10, 2)
+  closingAmount Decimal?  @db.Decimal(10, 2)
+  totalVentas   Decimal?  @db.Decimal(10, 2)
+  estado        String    @default("OPEN")
+  farmacia      farmacia  @relation(fields: [farmaciaId], references: [id], onDelete: Cascade, map: "Caja_farmaciaId_fkey")
+  user          user      @relation(fields: [usuarioId], references: [id], onDelete: Cascade, map: "Caja_usuarioId_fkey")
+
+  @@index([farmaciaId], map: "Caja_farmaciaId_idx")
+  @@index([usuarioId], map: "Caja_usuarioId_idx")
+}
+
+model categoria {
+  id         Int        @id @default(autoincrement())
+  nombre     String
+  farmaciaId Int
+  isMaster   Boolean    @default(false)
+  createdAt  DateTime   @default(now())
+  farmacia   farmacia   @relation(fields: [farmaciaId], references: [id], onDelete: Cascade, map: "Categoria_farmaciaId_fkey")
+  producto   producto[]
+
+  @@unique([farmaciaId, nombre], map: "Categoria_farmaciaId_nombre_key")
+  @@index([farmaciaId], map: "Categoria_farmaciaId_idx")
+}
+
+model cliente {
+  id               Int           @id @default(autoincrement())
+  tipoDoc          String
+  numeroDoc        String
+  nombreRazon      String
+  direccion        String?
+  telefono         String?
+  createdAt        DateTime      @default(now())
+  email            String?
+  distrito         String?
+  provincia        String?
+  departamento     String?
+  farmaciaId       Int
+  puntosAcumulados Int           @default(0)
+  farmacia         farmacia      @relation(fields: [farmaciaId], references: [id], onDelete: Cascade, map: "Cliente_farmaciaId_fkey")
+  comprobante      comprobante[]
+  comprobanteservicio comprobanteservicio[]
+  recetahabitual   recetahabitual[]
+
+  @@unique([farmaciaId, numeroDoc], map: "Cliente_farmaciaId_numeroDoc_key")
+  @@index([farmaciaId], map: "Cliente_farmaciaId_idx")
+}
+
+model comprobante {
+  id                       Int               @id @default(autoincrement())
+  farmaciaId               Int
+  clienteId                Int?
+  usuarioId                Int
+  tipo_comprobante         String
+  serie                    String            @db.VarChar(4)
+  numero                   Int
+  fecha_emision            DateTime          @default(now())
+  moneda                   String            @default("PEN") @db.Char(3)
+  tipo_operacion           String            @default("0101") @db.Char(4)
+  subtotal                 Decimal           @db.Decimal(10, 2)
+  igv                      Decimal           @db.Decimal(10, 2)
+  total                    Decimal           @db.Decimal(10, 2)
+  forma_pago               String
+  montoRecibido            Decimal?          @db.Decimal(10, 2)
+  vuelto                   Decimal?          @db.Decimal(10, 2)
+  tipo_documento_cliente   String?           @db.Char(1)
+  numero_documento_cliente String?
+  nombre_razon_social      String?
+  direccion_cliente        String?
+  estado_sunat             String            @default("PENDIENTE")
+  hash_cpe                 String?
+  cdr_sunat                String?           @db.Text
+  pdf_path                 String?
+  xml_path                 String?
+  fecha_envio_sunat        DateTime?
+  observaciones            String?           @db.Text
+  puntosCanjeados          Int               @default(0)
+  descuentoPuntos          Decimal           @default(0.00) @db.Decimal(10, 2)
+  cliente                  cliente?          @relation(fields: [clienteId], references: [id], map: "Comprobante_clienteId_fkey")
+  farmacia                 farmacia          @relation(fields: [farmaciaId], references: [id], onDelete: Cascade, map: "Comprobante_farmaciaId_fkey")
+  user                     user              @relation(fields: [usuarioId], references: [id], onDelete: Cascade, map: "Comprobante_usuarioId_fkey")
+  comprobanteitem          comprobanteitem[]
+  devolucion               devolucion[]
+
+  @@unique([farmaciaId, tipo_comprobante, serie, numero], map: "Comprobante_farmaciaId_tipo_comprobante_serie_numero_key")
+  @@index([clienteId], map: "Comprobante_clienteId_idx")
+  @@index([estado_sunat], map: "Comprobante_estado_sunat_idx")
+  @@index([farmaciaId], map: "Comprobante_farmaciaId_idx")
+  @@index([fecha_emision], map: "Comprobante_fecha_emision_idx")
+  @@index([usuarioId], map: "Comprobante_usuarioId_idx")
+}
+
+model comprobanteitem {
+  id              Int         @id @default(autoincrement())
+  comprobanteId   Int
+  productoId      Int?
+  servicioId      Int?
+  codigo_producto String?
+  descripcion     String
+  cantidad        Int
+  precio_unitario Decimal     @db.Decimal(10, 2)
+  subtotal        Decimal     @db.Decimal(10, 2)
+  igv             Decimal     @db.Decimal(10, 2)
+  total           Decimal     @db.Decimal(10, 2)
+  comprobante     comprobante @relation(fields: [comprobanteId], references: [id], onDelete: Cascade, map: "ComprobanteItem_comprobanteId_fkey")
+  producto        producto?   @relation(fields: [productoId], references: [id], map: "ComprobanteItem_productoId_fkey")
+  servicio        servicio?   @relation(fields: [servicioId], references: [id])
+
+  @@index([comprobanteId], map: "ComprobanteItem_comprobanteId_idx")
+  @@index([productoId], map: "ComprobanteItem_productoId_idx")
+  @@index([servicioId], map: "ComprobanteItem_servicioId_idx")
+}
+
+model envio {
+  id           Int          @id @default(autoincrement())
+  farmaciaId   Int
+  titulo       String
+  estado       envio_estado @default(BORRADOR)
+  shippingCost Decimal?     @db.Decimal(10, 2)
+  appliedAt    DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime
+  usuarioId    Int?
+  farmacia     farmacia     @relation(fields: [farmaciaId], references: [id], onDelete: Cascade, map: "Envio_farmaciaId_fkey")
+  user         user?        @relation(fields: [usuarioId], references: [id], onDelete: Cascade, map: "Envio_usuarioId_fkey")
+  envioitem    envioitem[]
+
+  @@index([estado], map: "Envio_estado_idx")
+  @@index([farmaciaId], map: "Envio_farmaciaId_idx")
+  @@index([usuarioId], map: "Envio_usuarioId_idx")
+}
+
+model envioitem {
+  id         Int       @id @default(autoincrement())
+  envioId    Int
+  payload    Json
+  productoId Int?      @unique(map: "EnvioItem_productoId_key")
+  appliedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  envio      envio     @relation(fields: [envioId], references: [id], onDelete: Cascade, map: "EnvioItem_envioId_fkey")
+  producto   producto? @relation(fields: [productoId], references: [id], map: "EnvioItem_productoId_fkey")
+
+  @@index([envioId], map: "EnvioItem_envioId_idx")
+  @@index([productoId], map: "EnvioItem_productoId_idx")
+}
+
+model etiqueta {
+  id               Int                @id @default(autoincrement())
+  nombre           String             @unique(map: "Etiqueta_nombre_key")
+  tipo             String
+  activo           Boolean            @default(true)
+  productoetiqueta productoetiqueta[]
+}
+
+model farmacia {
+  id                   Int                   @id @default(autoincrement())
+  nombre               String
+  ruc                  String?               @unique(map: "Farmacia_ruc_key")
+  direccion            String?
+  telefono             String?
+  email                String?
+  isActive             Boolean               @default(true)
+  createdAt            DateTime              @default(now())
+  caja                 caja[]
+  categoria            categoria[]
+  cliente              cliente[]
+  comprobante          comprobante[]
+  configuracionLealtad ConfiguracionLealtad[]
+  devolucion           devolucion[]
+  envio                envio[]
+  producto             producto[]
+  regla                regla[]
+  user                 user[]
+  auditoria            auditoria[]
+  categoriaservicio    categoriaservicio[]
+  servicio             servicio[]
+  comprobanteservicio  comprobanteservicio[]
+  turnocaja            turnocaja[]
+  configuracionpago    configuracionpago[]
+  configuracionpos     configuracionpos?
+  promocion            promocion[]
+  recetahabitual       recetahabitual[]
+}
+
+model configuracionpos {
+  id                    Int      @id @default(autoincrement())
+  farmaciaId            Int      @unique
+  igvPercent            Decimal  @default(18.00) @db.Decimal(10, 2)
+  autoDownloadTicket    Boolean  @default(true)
+  margenVencimientoMeses Int     @default(3)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  farmacia              farmacia @relation(fields: [farmaciaId], references: [id], onDelete: Cascade)
+
+  @@map("configuracion_pos")
+}
+
+model horario {
+  id         Int      @id @default(autoincrement())
+  lunes      Boolean  @default(false)
+  martes     Boolean  @default(false)
+  miercoles  Boolean  @default(false)
+  jueves     Boolean  @default(false)
+  viernes    Boolean  @default(false)
+  sabado     Boolean  @default(false)
+  domingo    Boolean  @default(false)
+  horaInicio DateTime @db.Time(0)
+  horaFin    DateTime @db.Time(0)
+  userId     Int      @unique(map: "Horario_userId_key")
+  user       user     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "Horario_userId_fkey")
+
+  @@index([userId], map: "Horario_userId_idx")
+}
+
+model masterimportlog {
+  id             Int      @id @default(autoincrement())
+  filename       String
+  totalProductos Int
+  importedBy     String
+  createdAt      DateTime @default(now())
+}
+
+model producto {
+  id                        Int                 @id @default(autoincrement())
+  farmaciaId                Int
+  categoriaId               Int
+  codigoBarras              String
+  nombre                    String
+  principioActivo           String?
+  concentracion             String?
+  laboratorio               String?
+  presentacion              String?
+  descripcion               String?
+  precioCosto               Decimal             @default(0.00) @db.Decimal(10, 2)
+  precioVenta               Decimal             @db.Decimal(10, 2)
+  stockActual               Int
+  stockMinimo               Int                 @default(0)
+  lote                      String?
+  fechaVencimiento          DateTime?
+  createdAt                 DateTime            @default(now())
+  comprobanteitem           comprobanteitem[]
+  envioitem                 envioitem?
+  categoria                 categoria           @relation(fields: [categoriaId], references: [id], map: "Producto_categoriaId_fkey")
+  farmacia                  farmacia            @relation(fields: [farmaciaId], references: [id], onDelete: Cascade, map: "Producto_farmaciaId_fkey")
+  productoetiqueta          productoetiqueta[]
+  reglasComoSugerido        ReglaVentaCruzada[] @relation("SugeridoProducto")
+  reglasComoTrigger         ReglaVentaCruzada[] @relation("TriggerProducto")
+  devolucionitem            devolucionitem[]
+  promocionitem             promocionitem[]
+  recetahabitual            recetahabitual[]
+
+  @@unique([farmaciaId, codigoBarras, lote, fechaVencimiento], name: "uk_producto_lote")
+  @@index([categoriaId], map: "Producto_categoriaId_idx")
+  @@index([farmaciaId], map: "Producto_farmaciaId_idx")
+}
+
+model productoetiqueta {
+  productoId Int
+  etiquetaId Int
+  createdAt  DateTime @default(now())
+  etiqueta   etiqueta @relation(fields: [etiquetaId], references: [id], onDelete: Cascade, map: "ProductoEtiqueta_etiquetaId_fkey")
+  producto   producto @relation(fields: [productoId], references: [id], onDelete: Cascade, map: "ProductoEtiqueta_productoId_fkey")
+
+  @@id([productoId, etiquetaId])
+  @@index([etiquetaId], map: "ProductoEtiqueta_etiquetaId_idx")
+}
+
+model productomaestro {
+  id                Int      @id @default(autoincrement())
+  productoDigemidId String?
+  nombre            String
+  concentracion     String?
+  formaFarmaceutica String?
+  presentacion      String?
+  registroSanitario String?
+  laboratorio       String?
+  fabricante        String?
+  rubro             String?
+  createdAt         DateTime @default(now())
+  fraccion          String?  @db.Text
+  principioActivo   String?  @db.Text
+  situacion         String?  @db.Text
+}
+
+model regla {
+  id                   Int      @id @default(autoincrement())
+  farmaciaId           Int
+  titulo               String
+  tipo                 String
+  mensaje              String
+  activo               Boolean  @default(true)
+  triggerEtiquetaId    Int?
+  sugerenciaEtiquetaId Int?
+  prioridad            Int?     @default(5)
+  productoId           Int?
+  condicion            String?
+  valorDescuento       Float?
+  tipoDescuento        String?
+  productosComboIds    Json?
+  productoFijoId       Int?
+  precioFijo           Float?
+  productoRegaloId     Int?
+  puntosPorMonto       Int?
+  montoBase            Float?
+  farmacia             farmacia @relation(fields: [farmaciaId], references: [id], onDelete: Cascade, map: "Regla_farmaciaId_fkey")
+
+  @@index([farmaciaId], map: "Regla_farmaciaId_idx")
+}
+
+model user {
+  id           Int           @id @default(autoincrement())
+  username     String        @unique(map: "User_username_key")
+  fullName     String
+  passwordHash String
+  role         user_role     @default(VENDEDOR)
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  farmaciaId   Int?
+  caja         caja[]
+  comprobante  comprobante[]
+  horario      horario?
+  farmacia     farmacia?     @relation(fields: [farmaciaId], references: [id], onDelete: Cascade, map: "User_farmaciaId_fkey")
+  devolucion   devolucion[]
+  auditoria    auditoria[]
+  comprobanteservicio comprobanteservicio[]
+  turnocaja    turnocaja[]
+  envios       envio[]
+
+  @@index([farmaciaId], map: "User_farmaciaId_fkey")
+}
+
+enum envio_estado {
+  BORRADOR
+  COTIZADO
+  APLICADO
+}
+
+enum user_role {
+  ADMIN
+  VENDEDOR
+}
+
+model devolucion {
+  id             Int              @id @default(autoincrement())
+  comprobanteId  Int
+  farmaciaId     Int
+  usuarioId      Int
+  motivo         String           @db.Text
+  totalDevuelto  Decimal          @db.Decimal(10, 2)
+  fecha          DateTime         @default(now())
+  comprobante    comprobante      @relation(fields: [comprobanteId], references: [id], onDelete: Cascade)
+  farmacia       farmacia         @relation(fields: [farmaciaId], references: [id], onDelete: Cascade)
+  usuario        user             @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  devolucionitem devolucionitem[]
+
+  @@index([comprobanteId], map: "Devolucion_comprobanteId_idx")
+  @@index([farmaciaId], map: "Devolucion_farmaciaId_idx")
+  @@index([usuarioId], map: "Devolucion_usuarioId_idx")
+}
+
+model devolucionitem {
+  id             Int        @id @default(autoincrement())
+  devolucionId   Int
+  productoId     Int?
+  servicioId     Int?
+  cantidad       Int
+  precioUnitario Decimal    @db.Decimal(10, 2)
+  subtotal       Decimal    @db.Decimal(10, 2)
+  devolucion     devolucion @relation(fields: [devolucionId], references: [id], onDelete: Cascade)
+  producto       producto?  @relation(fields: [productoId], references: [id])
+  servicio       servicio?  @relation(fields: [servicioId], references: [id])
+
+  @@index([devolucionId], map: "DevolucionItem_devolucionId_idx")
+  @@index([productoId], map: "DevolucionItem_productoId_idx")
+  @@index([servicioId], map: "DevolucionItem_servicioId_idx")
+}
+
+model auditoria {
+  id          Int      @id @default(autoincrement())
+  farmaciaId  Int
+  usuarioId   Int?
+  accion      String   @db.VarChar(100)
+  modulo      String   @db.VarChar(50)
+  descripcion String   @db.Text
+  detalles    String?  @db.Text
+  ip          String?  @db.VarChar(50)
+  fecha       DateTime @default(now())
+  farmacia    farmacia @relation(fields: [farmaciaId], references: [id], onDelete: Cascade)
+  usuario     user?    @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([farmaciaId], map: "Auditoria_farmaciaId_idx")
+  @@index([usuarioId], map: "Auditoria_usuarioId_idx")
+  @@index([fecha], map: "Auditoria_fecha_idx")
+  @@index([modulo], map: "Auditoria_modulo_idx")
+}
+
+model categoriaservicio {
+  id         Int        @id @default(autoincrement())
+  nombre     String     @db.VarChar(100)
+  icono      String?    @db.VarChar(50)
+  activo     Boolean    @default(true)
+  farmaciaId Int
+  createdAt  DateTime   @default(now())
+  farmacia   farmacia   @relation(fields: [farmaciaId], references: [id], onDelete: Cascade)
+  servicios  servicio[]
+
+  @@index([farmaciaId], map: "CategoriaServicio_farmaciaId_idx")
+}
+
+model servicio {
+  id                      Int                       @id @default(autoincrement())
+  nombre                  String                    @db.VarChar(200)
+  codigoSunat             String?                   @db.VarChar(20)
+  categoriaId             Int
+  proveedorTipo           String                    @default("INTERNO") @db.VarChar(20)
+  proveedorNombre         String?                   @db.VarChar(200)
+  costoInterno            Decimal                   @default(0) @db.Decimal(10, 2)
+  costoExterno            Decimal                   @default(0) @db.Decimal(10, 2)
+  costoTotal              Decimal                   @db.Decimal(10, 2)
+  precioVenta             Decimal                   @db.Decimal(10, 2)
+  utilidad                Decimal                   @db.Decimal(10, 2)
+  activo                  Boolean                   @default(true)
+  farmaciaId              Int
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
+  categoria               categoriaservicio         @relation(fields: [categoriaId], references: [id])
+  farmacia                farmacia                  @relation(fields: [farmaciaId], references: [id], onDelete: Cascade)
+  comprobanteservicioitem comprobanteservicioitem[]
+  comprobanteitem         comprobanteitem[]
+  devolucionitem          devolucionitem[]
+  recetahabitual          recetahabitual[]
+
+  @@index([farmaciaId], map: "Servicio_farmaciaId_idx")
+  @@index([categoriaId], map: "Servicio_categoriaId_idx")
+}
+
+model comprobanteservicio {
+  id                       Int                       @id @default(autoincrement())
+  farmaciaId               Int
+  usuarioId                Int
+  clienteId                Int?
+  tipo_comprobante         String                    @db.VarChar(2)
+  serie                    String                    @db.VarChar(10)
+  numero                   Int
+  fecha_emision            DateTime                  @default(now())
+  tipo_documento_cliente   String?                   @db.VarChar(10)
+  numero_documento_cliente String?                   @db.VarChar(20)
+  nombre_razon_social      String                    @db.VarChar(200)
+  direccion_cliente        String?                   @db.Text
+  subtotal                 Decimal                   @db.Decimal(10, 2)
+  igv                      Decimal                   @db.Decimal(10, 2)
+  total                    Decimal                   @db.Decimal(10, 2)
+  forma_pago               String                    @default("CONTADO") @db.VarChar(20)
+  montoRecibido            Decimal?                  @db.Decimal(10, 2)
+  vuelto                   Decimal?                  @db.Decimal(10, 2)
+  estado_sunat             String                    @default("PENDIENTE") @db.VarChar(20)
+  hash_cpe                 String?                   @db.VarChar(255)
+  cdr_sunat                String?                   @db.Text
+  pdf_path                 String?                   @db.VarChar(500)
+  xml_path                 String?                   @db.VarChar(500)
+  fecha_envio_sunat        DateTime?
+  observaciones            String?                   @db.Text
+  farmacia                 farmacia                  @relation(fields: [farmaciaId], references: [id], onDelete: Cascade)
+  user                     user                      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  cliente                  cliente?                  @relation(fields: [clienteId], references: [id])
+  items                    comprobanteservicioitem[]
+
+  @@unique([farmaciaId, tipo_comprobante, serie, numero])
+  @@index([farmaciaId], map: "ComprobanteServicio_farmaciaId_idx")
+  @@index([usuarioId], map: "ComprobanteServicio_usuarioId_idx")
+  @@index([clienteId], map: "ComprobanteServicio_clienteId_idx")
+}
+
+model comprobanteservicioitem {
+  id              Int                 @id @default(autoincrement())
+  comprobanteId   Int
+  servicioId      Int
+  codigo_servicio String?             @db.VarChar(50)
+  descripcion     String              @db.VarChar(500)
+  cantidad        Int
+  precio_unitario Decimal             @db.Decimal(10, 2)
+  subtotal        Decimal             @db.Decimal(10, 2)
+  igv             Decimal             @db.Decimal(10, 2)
+  total           Decimal             @db.Decimal(10, 2)
+  comprobante     comprobanteservicio @relation(fields: [comprobanteId], references: [id], onDelete: Cascade)
+  servicio        servicio            @relation(fields: [servicioId], references: [id])
+
+  @@index([comprobanteId], map: "ComprobanteServicioItem_comprobanteId_idx")
+  @@index([servicioId], map: "ComprobanteServicioItem_servicioId_idx")
+}
+
+model turnocaja {
+  id              Int          @id @default(autoincrement())
+  farmaciaId      Int
+  usuarioId       Int
+  montoInicial    Decimal      @db.Decimal(10, 2)
+  fechaApertura   DateTime     @default(now())
+  fechaCierre     DateTime?
+  montoVentas     Decimal      @default(0) @db.Decimal(10, 2)
+  montoEgresos    Decimal      @default(0) @db.Decimal(10, 2)
+  montoFinal      Decimal?     @db.Decimal(10, 2)
+  estado          String       @default("ABIERTO") @db.VarChar(20)
+  observaciones   String?      @db.Text
+  
+  farmacia        farmacia     @relation(fields: [farmaciaId], references: [id], onDelete: Cascade)
+  usuario         user         @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  egresos         egresocaja[]
+  
+  @@index([farmaciaId])
+  @@index([usuarioId])
+  @@index([estado])
+}
+
+model egresocaja {
+  id              Int        @id @default(autoincrement())
+  turnoId         Int
+  monto           Decimal    @db.Decimal(10, 2)
+  motivo          String     @db.Text
+  fecha           DateTime   @default(now())
+  
+  turno           turnocaja  @relation(fields: [turnoId], references: [id], onDelete: Cascade)
+  
+  @@index([turnoId])
+}
+
+model configuracionpago {
+  id          Int      @id @default(autoincrement())
+  farmaciaId  Int
+  metodo      String   @db.VarChar(50)
+  nombre      String   @db.VarChar(100)
+  activo      Boolean  @default(true)
+  imagenUrl   String?  @db.VarChar(500)
+  color       String?  @db.VarChar(50)
+  texto       String?  @db.Text
+  zoom        Float    @default(1)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  farmacia    farmacia @relation(fields: [farmaciaId], references: [id], onDelete: Cascade)
+
+  @@unique([farmaciaId, metodo])
+  @@index([farmaciaId])
+  @@map("configuracion_pago")
+}
+
+model recetahabitual {
+  id          Int      @id @default(autoincrement())
+  farmaciaId  Int      @default(1)
+  clienteId   Int
+  productoId  Int?
+  servicioId  Int?
+  cantidad    Int      @default(1)
+  notas       String?  @db.Text
+  createdAt   DateTime @default(now())
+  farmacia    farmacia @relation(fields: [farmaciaId], references: [id], onDelete: Cascade)
+  cliente     cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  producto    producto? @relation(fields: [productoId], references: [id])
+  servicio    servicio? @relation(fields: [servicioId], references: [id])
+
+  @@unique([farmaciaId, clienteId, productoId, servicioId])
+  @@index([farmaciaId])
+  @@index([clienteId])
+  @@index([productoId])
+  @@index([servicioId])
+}
