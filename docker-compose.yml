@@ -10,6 +10,10 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET}
       - PORT=4000
+      - NODE_ENV=production
+      - ADMIN_MASTER_PASSWORD=${ADMIN_MASTER_PASSWORD}
+      - RENIEC_API_URL=${RENIEC_API_URL}
+      - RENIEC_API_TOKEN=${RENIEC_API_TOKEN}
     restart: always
 
   frontend:
