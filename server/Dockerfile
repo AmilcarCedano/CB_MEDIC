@@ -4,10 +4,10 @@ WORKDIR /app
 
 RUN apk add --no-cache openssl openssl-dev libc6-compat
 
-COPY server/package*.json ./
+COPY package*.json ./
 RUN npm install
 
-COPY server/ .
+COPY . .
 
 RUN npx prisma generate
 
