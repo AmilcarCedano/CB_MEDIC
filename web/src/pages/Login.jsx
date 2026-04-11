@@ -39,7 +39,7 @@ export default function Login({ onLogin }) {
           {/* Logo/Icon */}
           <div className="inline-flex items-center justify-center w-32 h-32 bg-white/20 backdrop-blur-sm rounded-3xl shadow-2xl mb-8 overflow-hidden relative">
             <img
-              src={`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/uploads/system-logo.png`}
+              src={`${import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : "http://localhost:4000"}/uploads/system-logo.png`}
               alt="Logo"
               className="w-full h-full object-contain p-2"
               onError={(e) => {

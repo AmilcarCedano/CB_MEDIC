@@ -305,7 +305,7 @@ function ConfigCard({ config, farmacia, onChange, onDelete }) {
         setLocalImage(null);
     };
 
-    const serverUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+    const serverUrl = import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : 'http://localhost:4000';
 
     return (
         <Card className={`relative transition-all border-2 ${localActive ? 'border-indigo-100 hover:border-indigo-300' : 'border-gray-100 opacity-80'}`}>

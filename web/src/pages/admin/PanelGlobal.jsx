@@ -325,7 +325,7 @@ export default function PanelGlobal({
             <p className="text-sm font-medium text-gray-700">Logo actual</p>
             <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-200 overflow-hidden">
               <img
-                src={`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/uploads/system-logo.png?t=${Date.now()}`}
+                src={`${import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : "http://localhost:4000"}/uploads/system-logo.png?t=${Date.now()}`}
                 alt="System Logo"
                 className="max-w-full max-h-full object-contain"
                 onError={(e) => {

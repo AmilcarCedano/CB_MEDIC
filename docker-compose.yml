@@ -4,8 +4,8 @@ services:
   backend:
     build:
       context: ./server
-    ports:
-      - "4000:4000"
+    expose:
+      - "4000"
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET}
@@ -16,7 +16,7 @@ services:
     build:
       context: ./web
       args:
-        - VITE_API_URL=${VITE_API_URL}
+        - VITE_API_URL=
     ports:
       - "80:80"
     depends_on:
