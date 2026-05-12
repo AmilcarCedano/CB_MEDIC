@@ -1,194 +1,234 @@
-# 🚀 Guía de Despliegue CBMedic en Dokploy
+# 🚀 Guía Completa de Despliegue CBMedic en VPS Contabo
+
+**Última actualización:** Mayo 2026 | **VPS:** Contabo | **IP:** 213.199.58.162
+
+---
+
+## 🌐 Acceso al Sistema
+
+| Servicio | URL |
+|:---|:---|
+| **Aplicación (HTTPS)** | **https://cbmedic.213.199.58.162.sslip.io** |
+| **Aplicación (HTTP)** | http://213.199.58.162 (redirige a HTTPS) |
+| **Panel Dokploy** | http://213.199.58.162:3000 |
+
+### Credenciales Iniciales del Sistema
+| Usuario | Contraseña | Rol |
+|:---|:---|:---|
+| `admin` | `adminPass` | ADMIN Global |
+
+> ⚠️ **Cambiar la contraseña inmediatamente** después del primer login.
+
+---
+
+## 🔑 Acceso SSH a la VPS
+
+```bash
+# Desde terminal (Windows PowerShell / Linux / Mac)
+ssh root@213.199.58.162
+
+# Contraseña: 19LhNC0b
+```
+
+**Panel Contabo:** https://my.contabo.com  
+- Email: amilcar.cb.2015@gmail.com  
+- Password: qWNPLUJWv9RVW6Hvtfz4
 
 ---
 
 ## 📋 Arquitectura del Sistema
 
 ```
-Internet (solo Puerto 80)
+Internet (HTTPS puerto 443)
        │
        ▼
 ┌─────────────────────────────────┐
-│  FRONTEND (Nginx + React)       │
-│  Puerto público: 80             │
-│  Proxy reverso → backend:4000   │
-└──────────────┬──────────────────┘
-               │ (red interna Docker)
-┌──────────────▼──────────────────┐
-│  BACKEND (Node.js + Prisma)     │
-│  Puerto interno: 4000           │
-│  NO expuesto al público         │
+│  Traefik (Dokploy)              │
+│  Puertos: 80, 443, 3000         │
+│  Certificado: Let's Encrypt     │
+│  Dominio: cbmedic.*.sslip.io    │
 └──────────────┬──────────────────┘
                │
 ┌──────────────▼──────────────────┐
-│  MYSQL 8.x                      │
+│  FRONTEND (Nginx + React)       │
+│  Contenedor: cbmedic-frontend   │
+│  Puerto interno: 80             │
+│  Proxy reverso → backend:4000   │
+└──────────────┬──────────────────┘
+               │
+┌──────────────▼──────────────────┐
+│  BACKEND (Node.js + Prisma)     │
+│  Contenedor: cbmedic-backend    │
+│  Puerto interno: 4000           │
+└──────────────┬──────────────────┘
+               │
+┌──────────────▼──────────────────┐
+│  MYSQL 8.0                      │
+│  Contenedor: cbmedic-mysql      │
 │  Puerto interno: 3306           │
+│  Volumen: app_mysql_data        │
 └─────────────────────────────────┘
 ```
 
 ---
 
-## 🗄️ SERVICIO 1: MySQL
+## 🗂️ Ubicación de Archivos en VPS
 
-### Crear en Dokploy
-- **Tipo**: Database → MySQL
-- **Nombre**: `cbmedic-mysql`
-
-### Variables de Entorno
-
-```env
-MYSQL_ROOT_PASSWORD=TuPasswordSeguraAqui123
-MYSQL_DATABASE=cbmedic
 ```
+/opt/cbmedic/
+└── app/                    ← Repositorio clonado de GitHub
+    ├── docker-compose.yml  ← Compose de producción
+    ├── server/
+    │   ├── .env            ← Variables de entorno del backend
+    │   └── Dockerfile
+    └── web/
+        ├── nginx.conf      ← Configuración Nginx (proxy al backend)
+        └── Dockerfile
 
-### Post-creación
-- Si tienes backup: importar `deploy_tools/cbmedic_backup.sql`
-- Si es nueva: dejar vacía, luego ejecutar migraciones + seed
+/etc/dokploy/traefik/       ← Config de Traefik/Dokploy
+    traefik.yml
+    dynamic/
+        acme.json           ← Certificados SSL guardados
+```
 
 ---
 
-## ⚙️ SERVICIO 2: Backend (API)
+## 🔧 Variables de Entorno del Backend
 
-### Crear en Dokploy
-- **Tipo**: Application → Docker (GitHub)
-- **Repositorio**: `AmilcarCedano/CB_MEDIC`
-- **Rama**: `master`
-- **Dockerfile Path**: `server/Dockerfile`
-- **Build Context**: `./server`
-- **Dominio**: NO asignar (no necesita ser público)
-
-### Variables de Entorno
+Archivo: `/opt/cbmedic/app/server/.env`
 
 ```env
-DATABASE_URL=mysql://root:TuPasswordSeguraAqui123@cbmedic-mysql:3306/cbmedic
-JWT_SECRET=clave_secreta_larga_minimo_32_caracteres_ejemplo_xyz789
+DATABASE_URL="mysql://root:CBMedic2026Secure@cbmedic-mysql:3306/cbmedic"
+JWT_SECRET="cbmedic_jwt_x9k2m8p_2026_prod_secure_key_32chars"
 PORT=4000
 NODE_ENV=production
-ADMIN_MASTER_PASSWORD=ClaveAdminSegura2026
-
-# === API RENIEC (consulta DNI/RUC) ===
-RENIEC_API_URL=https://api.apis.net.pe/v2
-RENIEC_API_TOKEN=tu_token_de_apis_net_pe
+ADMIN_MASTER_PASSWORD="CBAdmin2026Master"
+RENIEC_API_URL="https://api-codart.cgrt.org"
+RENIEC_API_TOKEN="Egrne38d9Kn0bPtdsl2Gn8GzscYT2jiSkhnCZvBA9ngSgSr7R6QrkLHSWbra"
 ```
 
-### Tabla de Variables del Backend
-
-| Variable | Requerida | Descripción | Ejemplo |
-|:---|:---:|:---|:---|
-| `DATABASE_URL` | ✅ | Conexión MySQL. Host = nombre del servicio MySQL en Dokploy | `mysql://root:pass@cbmedic-mysql:3306/cbmedic` |
-| `JWT_SECRET` | ✅ | Clave para tokens de sesión. Mínimo 32 caracteres | `cbmedic_jwt_x7k9m2p_2026_prod` |
-| `PORT` | ✅ | Puerto interno del API | `4000` |
-| `NODE_ENV` | ✅ | Modo del servidor | `production` |
-| `ADMIN_MASTER_PASSWORD` | ✅ | Clave maestra para eliminar ventas/ingresos | La que decidas |
-| `RENIEC_API_URL` | ⚠️ | URL base de la API de documentos | `https://api.apis.net.pe/v2` |
-| `RENIEC_API_TOKEN` | ⚠️ | Token para consultar DNI/RUC | Lo obtienes en apis.net.pe |
-
-> **Nota sobre RENIEC**: Si no configuras estas variables, el sistema funciona normalmente pero la búsqueda de DNI/RUC no estará disponible. Puedes agregar o cambiar el token en cualquier momento desde Dokploy sin redesplegar.
-
-### 🔄 Cambiar el Token RENIEC (cuando generes uno nuevo)
-
-1. En Dokploy → Servicio **Backend** → **Medio Ambiente**
-2. Busca `RENIEC_API_TOKEN` y cambia el valor al nuevo token
-3. Haz clic en **Guardar**
-4. **Reiniciar** el servicio backend (NO necesitas reconstruir)
-5. Listo, el nuevo token está activo inmediatamente
-
----
-
-## 🌐 SERVICIO 3: Frontend (Web)
-
-### Crear en Dokploy
-- **Tipo**: Application → Docker (GitHub)
-- **Repositorio**: `AmilcarCedano/CB_MEDIC`
-- **Rama**: `master`
-- **Dockerfile Path**: `web/Dockerfile`
-- **Build Context**: `./web`
-
-### Variables de Entorno
-
-#### Sección "Medio Ambiente" (Environment):
-```env
-NODE_ENV=production
+### Variables de MySQL
 ```
-
-#### Sección "Argumentos de Construcción" (Build Arguments):
-```env
-VITE_API_URL=
-```
-
-> ⚠️ **`VITE_API_URL` DEBE estar VACÍO** (sin valor después del `=`). El proxy Nginx se encarga de conectar al backend.
-
-### Dominio
-- **Con dominio propio**: `farmacia.tudominio.com` → DNS apuntar al IP del VPS
-- **Sin dominio**: `http://IP-DE-TU-VPS` (puerto 80 directo)
-- **Con sslip.io**: `cbmedic.72.60.13.187.sslip.io`
-
-### Puerto
-- Puerto externo: `80` (marcar como público)
-
----
-
-## 📝 Resumen Rápido (Copiar/Pegar)
-
-### MySQL:
-```env
-MYSQL_ROOT_PASSWORD=TuPasswordSeguraAqui123
-MYSQL_DATABASE=cbmedic
-```
-
-### Backend:
-```env
-DATABASE_URL=mysql://root:TuPasswordSeguraAqui123@cbmedic-mysql:3306/cbmedic
-JWT_SECRET=clave_secreta_larga_minimo_32_caracteres
-PORT=4000
-NODE_ENV=production
-ADMIN_MASTER_PASSWORD=ClaveAdminSegura2026
-RENIEC_API_URL=https://api.apis.net.pe/v2
-RENIEC_API_TOKEN=tu_token_aqui
-```
-
-### Frontend (Build Arguments):
-```env
-VITE_API_URL=
+MYSQL_ROOT_PASSWORD: CBMedic2026Secure
+MYSQL_DATABASE: cbmedic
 ```
 
 ---
 
-## 🔑 Credenciales Iniciales
+## 🔄 Actualizar el Sistema (Nuevas Versiones)
 
-### Con backup importado:
-| Usuario | Contraseña | Rol |
-|:---|:---|:---|
-| `Anderson` | La que configuraste | ADMIN |
-
-### Con seed (BD nueva):
 ```bash
-# Ejecutar dentro del contenedor backend:
-npx prisma migrate deploy
-npx prisma db seed
+# 1. Desde tu PC - push los cambios a GitHub
+git add .
+git commit -m "descripción del cambio"
+git push origin master
+
+# 2. En la VPS - actualizar y reconstruir
+ssh root@213.199.58.162
+
+cd /opt/cbmedic/app
+git pull
+
+# Si cambiaste código del backend:
+docker compose build --no-cache backend
+docker compose up -d --force-recreate backend
+
+# Si cambiaste código del frontend:
+docker compose build --no-cache frontend
+docker compose up -d --force-recreate frontend
+
+# Si cambiaste ambos:
+docker compose build --no-cache
+docker compose up -d --force-recreate
 ```
-
-| Usuario | Contraseña | Rol |
-|:---|:---|:---|
-| `admin` | `adminPass` | ADMIN Global |
-| `vendedor` | `123` | VENDEDOR Demo |
-
-**⚠️ Cambiar estas contraseñas inmediatamente.**
 
 ---
 
-## 📋 Checklist de Despliegue
+## 🔑 Cambiar Token RENIEC
 
-- [ ] MySQL creado con `MYSQL_DATABASE=cbmedic`
-- [ ] Backend con las 7 variables configuradas
-- [ ] Frontend con `VITE_API_URL=` vacío en Build Arguments
-- [ ] Dominio asignado al frontend
-- [ ] Backend SIN dominio público
-- [ ] Primera construcción con Caché Limpia
-- [ ] BD inicializada (backup o migrate+seed)
-- [ ] Login probado en navegador
-- [ ] Contraseñas por defecto cambiadas
-- [ ] Token RENIEC configurado (opcional)
+```bash
+ssh root@213.199.58.162
+
+# Editar .env
+nano /opt/cbmedic/app/server/.env
+# Cambiar RENIEC_API_TOKEN=NuevoToken
+
+# Reiniciar backend (sin reconstruir)
+cd /opt/cbmedic/app
+docker compose restart backend
+```
+
+---
+
+## 💾 Base de Datos
+
+### Ver tablas
+```bash
+docker exec cbmedic-mysql mysql -uroot -pCBMedic2026Secure cbmedic -e "SHOW TABLES;"
+```
+
+### Backup de la BD
+```bash
+docker exec cbmedic-mysql mysqldump -uroot -pCBMedic2026Secure cbmedic > backup_$(date +%Y%m%d).sql
+```
+
+### Restaurar backup
+```bash
+docker exec -i cbmedic-mysql mysql -uroot -pCBMedic2026Secure cbmedic < backup.sql
+```
+
+---
+
+## 🛠️ Comandos Útiles en VPS
+
+```bash
+# Ver estado de todos los contenedores
+docker ps
+
+# Ver logs del backend
+docker logs cbmedic-backend --tail 50 -f
+
+# Ver logs del frontend
+docker logs cbmedic-frontend --tail 50 -f
+
+# Ver logs de Traefik (proxy/SSL)
+docker logs dokploy-traefik --tail 30
+
+# Reiniciar todo el sistema CB Medic
+cd /opt/cbmedic/app
+docker compose restart
+
+# Ver uso de recursos
+docker stats --no-stream
+```
+
+---
+
+## 🔐 HTTPS y Certificado SSL
+
+- **Proveedor:** Let's Encrypt (automático vía Traefik)
+- **Dominio:** `cbmedic.213.199.58.162.sslip.io`
+  - sslip.io resuelve automáticamente IPs en el dominio
+  - No requiere registro de dominio ni configuración DNS
+- **Renovación:** Automática cada 60 días por Traefik
+- **Cert guardado en:** `/etc/dokploy/traefik/dynamic/acme.json`
+
+---
+
+## 📋 Checklist de Despliegue Inicial ✅
+
+- [x] Ubuntu actualizado
+- [x] Docker 29.x instalado
+- [x] Dokploy v0.29.4 instalado
+- [x] MySQL 8.0 corriendo (`cbmedic-mysql`)
+- [x] Backend Node.js corriendo (`cbmedic-backend`)
+- [x] Frontend Nginx+React corriendo (`cbmedic-frontend`)
+- [x] BD inicializada con `prisma db push`
+- [x] Admin creado: `admin / adminPass`
+- [x] HTTPS activo con Let's Encrypt
+- [x] Redirect HTTP→HTTPS configurado
+- [x] Token RENIEC configurado
+- [x] nginx.conf apunta a `cbmedic-backend:4000`
 
 ---
 
@@ -196,26 +236,19 @@ npx prisma db seed
 
 | Síntoma | Solución |
 |:---|:---|
-| `ERR_CONNECTION_TIMED_OUT` | Reconstruir frontend con caché limpia |
-| Pantalla blanca | F12 → Consola. Verificar errores JS |
-| `Cannot find module` | Reconstruir backend con caché limpia |
-| Login no funciona | Verificar logs del backend |
-| DNI/RUC no busca | Configurar `RENIEC_API_TOKEN` en variables del backend |
-| `server/server` duplicado | Build Context debe ser `./server` |
-| Logo no carga | Ya resuelto con proxy en nginx.conf |
+| Frontend en "Restarting" | `docker logs cbmedic-frontend` — verificar nginx.conf upstream hostname |
+| Error 404 en dominio | Traefik no encontró el contenedor — verificar que está en `dokploy-network` |
+| Error 502 HTTPS | Frontend acaba de reiniciar, esperar 10-15s |
+| `host not found in upstream` | nginx.conf tiene hostname incorrecto del backend |
+| BD vacía / error seed | Ejecutar `docker exec cbmedic-backend npx prisma db push` |
+| Token RENIEC expirado | Actualizar `RENIEC_API_TOKEN` en `/opt/cbmedic/app/server/.env` y reiniciar backend |
+| Certificado SSL no genera | Verificar `certresolver=letsencrypt` en labels del docker-compose |
 
 ---
 
-## 🔄 Actualizaciones Futuras
+## 📝 Historial de Despliegue
 
-```bash
-# En tu PC:
-git add .
-git commit -m "descripción"
-git push
-
-# En Dokploy:
-# Si cambiaste código → Deploy normal
-# Si cambiaste variables → Solo reiniciar el servicio
-# Si cambiaste VITE_API_URL → Reconstruir frontend con Caché Limpia
-```
+| Fecha | Versión | Cambios |
+|:---|:---|:---|
+| Mayo 2026 | v1.0 | Despliegue inicial en Contabo VPS |
+| Mayo 2026 | v1.1 | Scanner QR móvil, etiquetas mejoradas, RENIEC Codart API |
