@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
 import { Card, Button, Input, Modal } from './components/ui';
-import { Plus, ArrowLeft, Eye, FileText, CheckCircle, Trash2, Clock } from 'lucide-react';
+import { Plus, ArrowLeft, Eye, FileText, CheckCircle, Trash2, Clock, AlertTriangle } from 'lucide-react';
 import ProductosStock from './ProductosStock';
+import { formatDateSafe } from '../../lib/dateUtils';
 
 const shipStatusMeta = {
   BORRADOR: { label: "Pendiente", classes: "bg-amber-100 text-amber-800" },
@@ -198,7 +199,19 @@ const Envios = ({ farmacia, user }) => {
                   return (
                     <tr key={item.id} className="border-b hover:bg-gray-50">
                       <td className="p-3 text-sm text-gray-600">{index + 1}</td>
-                      <td className="p-3 text-sm font-mono text-gray-700">{payload.codigoBarras || '-'}</td>
+                      <td className="p-3 text-sm font-mono text-gray-700">
+                        {payload.codigoBarras ? payload.codigoBarras : (
+                          item.currentBarcode ? (
+                            <span className="inline-flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full text-xs font-bold">
+                              <CheckCircle size={10} /> Código generado: {item.currentBarcode}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full text-xs font-bold">
+                              <AlertTriangle size={10} /> Sin código
+                            </span>
+                          )
+                        )}
+                      </td>
                       <td className="p-3">
                         <div className="font-semibold text-gray-900">{payload.nombre || '-'}</div>
                         {payload.principioActivo && (
@@ -257,7 +270,7 @@ const Envios = ({ farmacia, user }) => {
                   <div>
                     <p className="text-blue-700 font-medium">Productos con Vencimiento:</p>
                     {selectedEnvio.items.filter(item => item.payload?.fechaVencimiento).map((item, idx) => (
-                      <p key={idx} className="text-blue-600">• {item.payload.nombre}: {new Date(item.payload.fechaVencimiento).toLocaleDateString('es-PE')}</p>
+                      <p key={idx} className="text-blue-600">• {item.payload.nombre}: {formatDateSafe(item.payload.fechaVencimiento)}</p>
                     ))}
                   </div>
                 )}
@@ -305,7 +318,19 @@ const Envios = ({ farmacia, user }) => {
                   const meta = shipStatusMeta[envio.estado] || shipStatusMeta.BORRADOR;
                   return (
                     <tr key={envio.id} className="border-b">
-                      <td className="p-4">{envio.titulo}</td>
+                      <td className="p-4">
+                        <div>{envio.titulo}</div>
+                        {envio.items?.some(item => !item.payload?.codigoBarras && !item.currentBarcode) && (
+                          <span className="inline-flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full text-xs font-bold mt-1">
+                            <AlertTriangle size={10} /> Productos sin código
+                          </span>
+                        )}
+                        {envio.items?.some(item => !item.payload?.codigoBarras && item.currentBarcode) && (
+                          <span className="inline-flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full text-xs font-bold mt-1">
+                            <CheckCircle size={10} /> Códigos generados
+                          </span>
+                        )}
+                      </td>
                       <td className="p-4">
                         <span className={`px-2 py-1 text-xs font-semibold rounded-full ${meta.classes}`}>
                           {meta.label}

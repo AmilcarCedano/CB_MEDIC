@@ -136,4 +136,46 @@ router.put('/pos', async (req, res) => {
     }
 });
 
+// --- Configuración de API de Consultas (RENIEC/SUNAT) ---
+const RENIEC_CONFIG_PATH = path.join(__dirname, '../../../reniec_config.json');
+
+const getReniecConfig = () => {
+    try {
+        if (fs.existsSync(RENIEC_CONFIG_PATH)) {
+            return JSON.parse(fs.readFileSync(RENIEC_CONFIG_PATH, 'utf8'));
+        }
+    } catch (e) { /* ignorar */ }
+    return {};
+};
+
+// GET: estado del token (si está configurado, sin revelar el valor)
+router.get('/reniec-token', (req, res) => {
+    const config = getReniecConfig();
+    const token = config.apiToken || process.env.RENIEC_API_TOKEN || '';
+    res.json({
+        hasToken: !!token && token !== 'coloca_tu_token',
+        // Mostrar solo los últimos 6 chars como referencia
+        tokenPreview: token && token !== 'coloca_tu_token'
+            ? `${'*'.repeat(Math.max(0, token.length - 6))}${token.slice(-6)}`
+            : null
+    });
+});
+
+// POST: actualizar token
+router.post('/reniec-token', (req, res) => {
+    const { apiToken } = req.body;
+    if (!apiToken || typeof apiToken !== 'string' || apiToken.trim().length < 10) {
+        return res.status(400).json({ error: 'Token inválido. Debe tener al menos 10 caracteres.' });
+    }
+    try {
+        const config = getReniecConfig();
+        config.apiToken = apiToken.trim();
+        fs.writeFileSync(RENIEC_CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
+        res.json({ success: true, message: 'API Key guardada correctamente.' });
+    } catch (err) {
+        console.error('Error guardando reniec config:', err);
+        res.status(500).json({ error: 'No se pudo guardar la API Key.' });
+    }
+});
+
 module.exports = router;

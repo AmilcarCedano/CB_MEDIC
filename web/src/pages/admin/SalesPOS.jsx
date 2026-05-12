@@ -1873,7 +1873,7 @@ export default function SalesPOS({ farmacia, user }) {
                         value={posClientData.nombre_razon}
                         onChange={(e) => setPosClientData(p => ({ ...p, nombre_razon: e.target.value }))}
                         required
-                        disabled={posClientData.nombre_razon && !searchError && searchLoading === false} // Deshabilitar si ya se consultó exitosamente
+                        placeholder="Se puede editar manualmente o buscar con el botón"
                     />
 
                     {posClientData.type_doc === 'RUC' && (

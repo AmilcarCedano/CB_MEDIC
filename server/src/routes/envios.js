@@ -6,6 +6,31 @@ const { requireAdmin } = require('../middleware/auth');
 
 const ESTADOS = ['BORRADOR', 'COTIZADO', 'APLICADO'];
 
+// Genera un número de lote en formato: LOT-YYYYMMDD-NNN
+const generateLoteSerial = async (farmaciaId) => {
+  const today = new Date();
+  const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
+  const prefix = `LOT-${dateStr}-`;
+  
+  // Buscar el último lote con este prefijo
+  const lastProduct = await prisma.producto.findFirst({
+    where: {
+      farmaciaId,
+      lote: { startsWith: prefix }
+    },
+    orderBy: { lote: 'desc' }
+  });
+  
+  let nextNum = 1;
+  if (lastProduct?.lote) {
+    const parts = lastProduct.lote.split('-');
+    const lastNum = parseInt(parts[parts.length - 1], 10);
+    if (!isNaN(lastNum)) nextNum = lastNum + 1;
+  }
+  
+  return `${prefix}${String(nextNum).padStart(3, '0')}`;
+};
+
 const sanitizePayload = (payload = {}) => ({
   codigoBarras: payload.codigoBarras?.trim() || '',
   nombre: payload.nombre?.trim() || '',
@@ -37,8 +62,8 @@ const loadCategoria = async (tx, farmaciaId, categoriaId, cache) => {
 
 const buildProductData = async (tx, farmaciaId, payload, cache) => {
   const data = sanitizePayload(payload);
-  if (!data.codigoBarras || !data.nombre || data.categoriaId === null) {
-    throw new Error('Datos del producto incompletos');
+  if (!data.nombre || data.categoriaId === null) {
+    throw new Error('Datos del producto incompletos (nombre y categoría son obligatorios)');
   }
   const precio = Number(data.precioVenta);
   const stock = Number(data.stockActual);
@@ -49,7 +74,7 @@ const buildProductData = async (tx, farmaciaId, payload, cache) => {
   return {
     farmaciaId,
     categoriaId: data.categoriaId,
-    codigoBarras: data.codigoBarras,
+    codigoBarras: data.codigoBarras || null,
     nombre: data.nombre,
     descripcion: data.descripcion || null,
     principioActivo: data.principioActivo || null,
@@ -97,13 +122,16 @@ router.get('/', async (req, res) => {
 
     const envios = await prisma.envio.findMany({
       where: whereClause,
-      include: { envioitem: true },
+      include: { envioitem: { include: { producto: { select: { id: true, codigoBarras: true } } } } },
       orderBy: { createdAt: 'desc' },
     });
 
     const serialized = envios.map((envio) => ({
       ...envio,
-      items: envio.envioitem,
+      items: envio.envioitem.map(item => ({
+        ...item,
+        currentBarcode: item.producto?.codigoBarras || null,
+      })),
     }));
 
     return res.json(serialized);
@@ -143,15 +171,18 @@ router.post('/', async (req, res) => {
         for (const payload of items) {
           let prodId = null;
           
-          // Buscar si ya existe un producto con el MISMO código de barras, lote y vencimiento en esta farmacia
-          const existing = await tx.producto.findFirst({
-            where: {
-              farmaciaId: parsedFarmaciaId,
-              codigoBarras: payload.codigoBarras,
-              lote: payload.lote?.trim() || null,
-              fechaVencimiento: payload.fechaVencimiento ? new Date(payload.fechaVencimiento) : null
-            }
-          });
+          // Solo buscar existente si tiene código de barras
+          let existing = null;
+          if (payload.codigoBarras?.trim()) {
+            existing = await tx.producto.findFirst({
+              where: {
+                farmaciaId: parsedFarmaciaId,
+                codigoBarras: payload.codigoBarras,
+                lote: payload.lote?.trim() || null,
+                fechaVencimiento: payload.fechaVencimiento ? new Date(payload.fechaVencimiento) : null
+              }
+            });
+          }
 
           if (existing) {
             // Si existe el lote exacto, incrementamos stock
@@ -173,6 +204,7 @@ router.post('/', async (req, res) => {
           await tx.envioitem.create({
             data: {
               envioId: envio.id,
+              productoId: prodId,
               payload: sanitizePayload(payload),
               appliedAt: new Date(),
             }
@@ -293,15 +325,18 @@ router.post('/:id/confirm', async (req, res) => {
     const cache = new Map();
     const updatedEnvio = await prisma.$transaction(async (tx) => {
       for (const item of envio.envioitem) {
-        // Buscar si ya existe el lote exacto para este código de barras en esta farmacia
-        const existing = await tx.producto.findFirst({
-            where: {
-              farmaciaId: envio.farmaciaId,
-              codigoBarras: item.payload.codigoBarras,
-              lote: item.payload.lote?.trim() || null,
-              fechaVencimiento: item.payload.fechaVencimiento ? new Date(item.payload.fechaVencimiento) : null
-            }
-        });
+        // Solo buscar existente si tiene código de barras
+        let existing = null;
+        if (item.payload.codigoBarras?.trim()) {
+          existing = await tx.producto.findFirst({
+              where: {
+                farmaciaId: envio.farmaciaId,
+                codigoBarras: item.payload.codigoBarras,
+                lote: item.payload.lote?.trim() || null,
+                fechaVencimiento: item.payload.fechaVencimiento ? new Date(item.payload.fechaVencimiento) : null
+              }
+          });
+        }
 
         if (existing) {
           const incrementalStock = Number(item.payload?.stockActual) || 0;
@@ -314,7 +349,7 @@ router.post('/:id/confirm', async (req, res) => {
 
           await tx.envioitem.update({
             where: { id: item.id },
-            data: { appliedAt: new Date() },
+            data: { productoId: existing.id, appliedAt: new Date() },
           });
           continue;
         }
@@ -464,6 +499,36 @@ router.delete('/:id', requireAdmin, async (req, res) => {
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'No se pudo eliminar el ingreso' });
+  }
+});
+
+// GET /api/envios/generate-lote - Generar siguiente número de lote
+router.get('/generate-lote', async (req, res) => {
+  try {
+    const farmaciaId = req.farmaciaId;
+    if (!farmaciaId) return res.status(400).json({ error: 'Farmacia no identificada' });
+    const lote = await generateLoteSerial(farmaciaId);
+    return res.json({ lote });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'No se pudo generar el número de lote' });
+  }
+});
+
+// GET /api/envios/validate-barcode - Validar si un código de barras ya existe
+router.get('/validate-barcode', async (req, res) => {
+  try {
+    const farmaciaId = req.farmaciaId;
+    const barcode = req.query.code;
+    if (!farmaciaId || !barcode) return res.json({ exists: false });
+    
+    const existing = await prisma.producto.findFirst({
+      where: { farmaciaId, codigoBarras: barcode.trim() }
+    });
+    return res.json({ exists: !!existing, productName: existing?.nombre || null });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Error al validar código de barras' });
   }
 });
 

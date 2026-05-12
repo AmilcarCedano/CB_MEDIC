@@ -36,6 +36,7 @@ import Categorias from "./Categorias.jsx";
 import Usuarios from "./Usuarios.jsx";
 import Inventario from "./Inventario.jsx";
 import Envios from "./Envios.jsx";
+import Etiquetas from "./Etiquetas.jsx";
 // --- NUEVOS COMPONENTES ---
 import Clientes from "./Clientes.jsx";
 import Ofertas from "./Ofertas.jsx";
@@ -58,6 +59,7 @@ const getMenuStructure = (role) => {
       items: [
         { key: "Products", name: "Gestión de Ingresos", icon: Truck },
         { key: "Inventario", name: "Inventario", icon: Package },
+        { key: "Etiquetas", name: "Creación de Etiquetas", icon: Tag },
         { key: "Categories", name: "Categorías", icon: ListChecks },
       ],
     },
@@ -102,6 +104,7 @@ const getMenuStructure = (role) => {
           items: [
              { key: "Products", name: "Registro Medicamentos", icon: Truck },
              { key: "Inventario", name: "Stock Inventario", icon: Package },
+             { key: "Etiquetas", name: "Etiquetas", icon: Tag },
           ]
         },
         { key: "GestionVentas", name: "Gestión de Ventas", icon: FileText },
@@ -652,6 +655,8 @@ export default function AdminShell({ session, onLogout }) {
         return <Envios farmacia={selectedFarmacia} user={session.user} />; 
       case "Inventario":
         return <Inventario farmacia={selectedFarmacia} user={session.user} />;
+      case "Etiquetas":
+        return <Etiquetas farmacia={selectedFarmacia} user={session.user} />;
       case "Categories":
         return <Categorias farmacia={selectedFarmacia} user={session.user} />;
       case "Vendors":

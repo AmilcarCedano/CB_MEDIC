@@ -1,71 +1,127 @@
 const router = require('express').Router();
-const axios = require('axios');
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
 
-// Endpoint genérico para buscar DNI o RUC
+const getApiToken = () => {
+  try {
+    const configPath = path.join(__dirname, '../../../reniec_config.json');
+    if (fs.existsSync(configPath)) {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      if (config.apiToken) return config.apiToken;
+    }
+  } catch (e) { /* Ignorar */ }
+  return process.env.RENIEC_API_TOKEN;
+};
+
+function httpsGet(urlStr, token) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(urlStr);
+    const req = https.request({
+      hostname: parsed.hostname,
+      path: parsed.pathname + parsed.search,
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
+    }, (res) => {
+      let body = '';
+      res.on('data', chunk => { body += chunk; });
+      res.on('end', () => {
+        try {
+          resolve({ status: res.statusCode, data: JSON.parse(body) });
+        } catch {
+          reject(new Error(`Respuesta no-JSON status=${res.statusCode}: ${body.substring(0, 120)}`));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(12000, () => { req.destroy(new Error('TIMEOUT')); });
+    req.end();
+  });
+}
+
+// GET /reniec/search?type=DNI&number=72634612
+// GET /reniec/search?type=RUC&number=20538856674
 router.get('/search', async (req, res) => {
-  const { type, number } = req.query; // Ej: /search?type=DNI&number=12345678
+  const { type, number } = req.query;
 
   if (!type || !number) {
-    return res.status(400).json({ error: 'Se requiere "type" (DNI/RUC) y "number".' });
+    // Devolver 200 con success:false para que el frontend no explote en catch
+    return res.json({ success: false, error: 'Se requiere "type" (DNI/RUC) y "number".' });
   }
 
-  const apiUrl = process.env.RENIEC_API_URL;
-  const apiToken = process.env.RENIEC_API_TOKEN;
+  const apiToken = getApiToken();
+  const typeUpper = type.toUpperCase();
+  console.log(`[RENIEC] ${typeUpper} ${number} | token ok: ${!!apiToken && apiToken !== 'coloca_tu_token'}`);
 
-  if (!apiUrl || !apiToken) {
-    return res.status(500).json({ error: 'La URL o el Token de la API de documentos no están configurados en el servidor.' });
+  if (!apiToken || apiToken === 'coloca_tu_token') {
+    return res.json({
+      success: false,
+      error: 'API Key no configurada. Ve a Ajustes del Sistema → API de Consulta DNI/RUC.'
+    });
   }
 
+  const BASE = 'https://api-codart.cgrt.org/api/v1/consultas';
   let externalUrl;
-  if (type.toUpperCase() === 'DNI') {
-    externalUrl = `${apiUrl}/reniec/dni?numero=${number}`;
-  } else if (type.toUpperCase() === 'RUC') {
-    externalUrl = `${apiUrl}/sunat/ruc?numero=${number}`;
+  if (typeUpper === 'DNI') {
+    externalUrl = `${BASE}/reniec/dni/${number}`;
+  } else if (typeUpper === 'RUC') {
+    externalUrl = `${BASE}/sunat/ruc/${number}`;
   } else {
-    return res.status(400).json({ error: 'El tipo de documento debe ser DNI o RUC.' });
+    return res.json({ success: false, error: 'Tipo de documento inválido. Use DNI o RUC.' });
   }
 
   try {
-    const response = await axios.get(externalUrl, {
-      headers: { Authorization: `Bearer ${apiToken}` }
-    });
+    console.log(`[RENIEC] GET ${externalUrl}`);
+    const { status, data } = await httpsGet(externalUrl, apiToken);
+    console.log(`[RENIEC] Resp: status=${status} success=${data?.success}`);
 
-    const data = response.data;
-    let normalizedData;
+    if (!data.success) {
+      const errMsg = data?.message || data?.error || `Documento ${number} no encontrado en el servicio externo.`;
+      console.log(`[RENIEC] No encontrado: ${errMsg}`);
+      return res.json({ success: false, error: errMsg });
+    }
 
-    if (type.toUpperCase() === 'DNI') {
-      normalizedData = {
+    let result;
+    if (typeUpper === 'DNI') {
+      const r = data.result || {};
+      const nombre = r.full_name ||
+        [r.first_name, r.first_last_name, r.second_last_name].filter(Boolean).join(' ').trim();
+      result = {
         success: true,
-        nombreRazon: data.full_name,
-        // DNI search does not provide address details
-        direccion: '',
-        distrito: '',
-        provincia: '',
-        departamento: '',
+        nombreRazon: nombre,
+        direccion: r.address || '',
+        distrito: r.district || '',
+        provincia: r.province || '',
+        departamento: r.department || '',
+        ubigeo: ''
       };
-    } else { // RUC
-      normalizedData = {
+    } else {
+      const r = data.result || {};
+      result = {
         success: true,
-        nombreRazon: data.razon_social,
-        direccion: data.direccion,
-        distrito: data.distrito,
-        provincia: data.provincia,
-        departamento: data.departamento,
+        nombreRazon: r.razon_social || '',
+        direccion: r.direccion || '',
+        distrito: r.distrito || '',
+        provincia: r.provincia || '',
+        departamento: r.departamento || '',
+        ubigeo: r.ubigeo || ''
       };
     }
 
-    res.json(normalizedData);
+    console.log(`[RENIEC] OK → ${result.nombreRazon}`);
+    return res.json(result);
 
   } catch (err) {
-    console.error('Error al consultar API de documentos:', err.message);
-    if (err.response) {
-      // Si la API externa responde con un error (ej. 404 Not Found)
-      return res.status(err.response.status).json({ success: false, error: err.response.data.message || `Documento ${number} no encontrado.` });
-    }
-    // Otros errores (ej. de red)
-    res.status(500).json({ success: false, error: 'Fallo la consulta al servicio de documentos.' });
+    console.error('[RENIEC] Error interno:', err.message);
+    const msg = err.message === 'TIMEOUT'
+      ? 'Timeout al consultar el servicio. Intenta nuevamente.'
+      : 'Error al conectar con el servicio de consulta.';
+    return res.json({ success: false, error: msg });
   }
 });
 
 module.exports = router;
-

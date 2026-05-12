@@ -298,7 +298,7 @@ model producto {
   id                        Int                 @id @default(autoincrement())
   farmaciaId                Int
   categoriaId               Int
-  codigoBarras              String
+  codigoBarras              String?
   nombre                    String
   principioActivo           String?
   concentracion             String?

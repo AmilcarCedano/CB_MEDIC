@@ -74,12 +74,21 @@ router.post('/', async (req, res) => {
     if (
       !farmaciaId ||
       !categoriaId ||
-      !codigoBarras ||
       !nombre ||
       precioVenta === undefined ||
       stockActual === undefined
     ) {
       return res.status(400).json({ error: 'Campos obligatorios faltantes' });
+    }
+
+    // Validar unicidad del código de barras si se proporcionó
+    if (codigoBarras && codigoBarras.trim()) {
+      const existingBarcode = await prisma.producto.findFirst({
+        where: { farmaciaId: Number(farmaciaId), codigoBarras: codigoBarras.trim() }
+      });
+      if (existingBarcode) {
+        return res.status(409).json({ error: `Ya existe un producto con el código de barras "${codigoBarras.trim()}"` });
+      }
     }
 
     const categoria = await prisma.categoria.findUnique({ where: { id: Number(categoriaId) } });
@@ -91,7 +100,7 @@ router.post('/', async (req, res) => {
       data: {
         farmaciaId: Number(farmaciaId),
         categoriaId: Number(categoriaId),
-        codigoBarras: String(codigoBarras).trim(),
+        codigoBarras: codigoBarras?.trim() || null,
         nombre: nombre.trim(),
         principioActivo: principioActivo?.trim() || null,
         concentracion: concentracion?.trim() || null,
@@ -132,7 +141,6 @@ router.put('/:id', async (req, res) => {
   try {
     const productoId = Number(req.params.id);
     const body = req.body || {};
-    const { categoriaId, categoria, ...dataToUpdate } = body;
 
     const farmaciaId = req.farmaciaId;
     const userRole = req.userRole;
@@ -143,8 +151,8 @@ router.put('/:id', async (req, res) => {
     }
 
     // 1. Validar STOCK (Solo aumentar para Vendedor)
-    if (dataToUpdate.stockActual !== undefined) {
-      const newStock = Number(dataToUpdate.stockActual || 0);
+    if (body.stockActual !== undefined) {
+      const newStock = Number(body.stockActual || 0);
       const currentStock = Number(producto.stockActual || 0);
 
       if (newStock < currentStock && userRole !== 'ADMIN') {
@@ -156,8 +164,8 @@ router.put('/:id', async (req, res) => {
 
     // 2. Validar PRECIO (Solo aumentar para Vendedor)
     let descripcionPrecio = '';
-    if (dataToUpdate.precioVenta !== undefined) {
-      const newPrice = Number(dataToUpdate.precioVenta || 0);
+    if (body.precioVenta !== undefined) {
+      const newPrice = Number(body.precioVenta || 0);
       const currentPrice = Number(producto.precioVenta || 0);
 
       if (newPrice < currentPrice && userRole !== 'ADMIN') {
@@ -172,16 +180,15 @@ router.put('/:id', async (req, res) => {
     }
 
     // 3. Validar LOTE y FECHA (Solo ADMIN)
-    // Comparamos como strings para evitar problemas de objetos Fecha/ISO inconsistentes
-    if ((dataToUpdate.lote !== undefined || dataToUpdate.fechaVencimiento !== undefined) && userRole !== 'ADMIN') {
-        const payloadLote = String(dataToUpdate.lote ?? '').trim();
+    if ((body.lote !== undefined || body.fechaVencimiento !== undefined) && userRole !== 'ADMIN') {
+        const payloadLote = String(body.lote ?? '').trim();
         const currentLote = String(producto.lote ?? '').trim();
         
-        const payloadFecha = dataToUpdate.fechaVencimiento ? new Date(dataToUpdate.fechaVencimiento).toISOString().split('T')[0] : '';
+        const payloadFecha = body.fechaVencimiento ? new Date(body.fechaVencimiento).toISOString().split('T')[0] : '';
         const currentFecha = producto.fechaVencimiento ? new Date(producto.fechaVencimiento).toISOString().split('T')[0] : '';
 
-        const changedLote = dataToUpdate.lote !== undefined && payloadLote !== currentLote;
-        const changedFecha = dataToUpdate.fechaVencimiento !== undefined && payloadFecha !== currentFecha;
+        const changedLote = body.lote !== undefined && payloadLote !== currentLote;
+        const changedFecha = body.fechaVencimiento !== undefined && payloadFecha !== currentFecha;
         
         if (changedLote || changedFecha) {
             return res.status(403).json({
@@ -190,17 +197,48 @@ router.put('/:id', async (req, res) => {
         }
     }
 
+    // 4. Validar CODIGO DE BARRAS unicidad (si se está cambiando)
+    let sanitizedBarcode = undefined;
+    if (body.codigoBarras !== undefined) {
+      sanitizedBarcode = body.codigoBarras?.trim() || null;
+      const currentBarcode = producto.codigoBarras || null;
+      
+      if (sanitizedBarcode && sanitizedBarcode !== currentBarcode) {
+        const existingBarcode = await prisma.producto.findFirst({
+          where: {
+            farmaciaId,
+            codigoBarras: sanitizedBarcode,
+            id: { not: productoId }
+          }
+        });
+        if (existingBarcode) {
+          return res.status(409).json({
+            error: `Ya existe otro producto con el código de barras "${sanitizedBarcode}" (${existingBarcode.nombre})`
+          });
+        }
+      }
+    }
+
+    // 5. Construir datos de actualización solo con campos válidos de Prisma
+    const updateData = {};
+    if (body.categoriaId !== undefined) updateData.categoriaId = Number(body.categoriaId);
+    if (sanitizedBarcode !== undefined) updateData.codigoBarras = sanitizedBarcode;
+    if (body.nombre !== undefined) updateData.nombre = body.nombre;
+    if (body.principioActivo !== undefined) updateData.principioActivo = body.principioActivo || null;
+    if (body.concentracion !== undefined) updateData.concentracion = body.concentracion || null;
+    if (body.laboratorio !== undefined) updateData.laboratorio = body.laboratorio || null;
+    if (body.presentacion !== undefined) updateData.presentacion = body.presentacion || null;
+    if (body.descripcion !== undefined) updateData.descripcion = body.descripcion || null;
+    if (body.precioCosto !== undefined) updateData.precioCosto = Number(body.precioCosto);
+    if (body.precioVenta !== undefined) updateData.precioVenta = Number(body.precioVenta);
+    if (body.stockActual !== undefined) updateData.stockActual = Number(body.stockActual);
+    if (body.stockMinimo !== undefined) updateData.stockMinimo = Number(body.stockMinimo);
+    if (body.lote !== undefined) updateData.lote = body.lote?.trim() || null;
+    if (body.fechaVencimiento !== undefined) updateData.fechaVencimiento = body.fechaVencimiento ? new Date(body.fechaVencimiento) : null;
+
     const updatedProducto = await prisma.producto.update({
       where: { id: productoId },
-      data: {
-        ...dataToUpdate,
-        categoriaId: categoriaId ? Number(categoriaId) : undefined,
-        precioCosto: dataToUpdate.precioCosto !== undefined ? Number(dataToUpdate.precioCosto) : undefined,
-        precioVenta: dataToUpdate.precioVenta !== undefined ? Number(dataToUpdate.precioVenta) : undefined,
-        stockActual: dataToUpdate.stockActual !== undefined ? Number(dataToUpdate.stockActual) : undefined,
-        stockMinimo: dataToUpdate.stockMinimo !== undefined ? Number(dataToUpdate.stockMinimo) : undefined,
-        fechaVencimiento: dataToUpdate.fechaVencimiento ? new Date(dataToUpdate.fechaVencimiento) : undefined,
-      },
+      data: updateData,
     });
 
     logAudit({
@@ -209,7 +247,7 @@ router.put('/:id', async (req, res) => {
       accion: 'EDITAR',
       modulo: 'INVENTARIO',
       descripcion: `Producto editado: ${updatedProducto.nombre}${descripcionPrecio}`,
-      detalles: { productoId, data: dataToUpdate }
+      detalles: { productoId, data: updateData }
     });
 
     return res.json(updatedProducto);

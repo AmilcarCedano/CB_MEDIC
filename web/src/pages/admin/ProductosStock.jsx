@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Package, Plus, Search, ArrowLeft, Save, FileDown, Edit } from "lucide-react";
+import { Package, Plus, Search, ArrowLeft, Save, FileDown, Edit, AlertTriangle, Camera } from "lucide-react";
 import { api } from "../../lib/api.js";
 import { Card, Button, Input, Select, Modal } from "./components/ui.jsx";
+import { formatDateSafe, toDateInputValue, toNoonUTC } from "../../lib/dateUtils.js";
+import BarcodeScannerModal from "./components/BarcodeScannerModal.jsx";
 
 const createEmptyForm = () => ({
   codigoBarras: "",
@@ -43,6 +45,8 @@ export default function ProductosStock({ farmacia, onBack }) {
   const [editTarget, setEditTarget] = useState(null);
 
   const [formData, setFormData] = useState(createEmptyForm());
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [barcodeWarning, setBarcodeWarning] = useState(null);
 
   const treatAsMedicamento = useMemo(() => {
     const cat = categories.find((c) => c.id === selectedCategoryId);
@@ -65,9 +69,52 @@ export default function ProductosStock({ farmacia, onBack }) {
     }
   };
 
+  // Auto-generar lote al montar
+  const fetchAutoLote = async () => {
+    try {
+      const { data } = await api.get("/envios/generate-lote");
+      setFormData(prev => ({ ...prev, lote: data.lote }));
+    } catch (err) {
+      console.error("Error generando lote:", err);
+    }
+  };
+
   useEffect(() => {
     fetchCategories();
+    fetchAutoLote();
   }, [farmacia?.id]);
+
+  // Validar código de barras contra el servidor (debounced)
+  useEffect(() => {
+    const barcode = formData.codigoBarras?.trim();
+    if (!barcode || barcode.length < 3) {
+      setBarcodeWarning(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        // Primero verificar en la lista actual
+        const inList = shipmentItems.find(item => item.codigoBarras === barcode);
+        if (inList) {
+          if (!cancelled) setBarcodeWarning(`Este código ya está en la lista actual: "${inList.nombre}"`);
+          return;
+        }
+        // Verificar en el servidor
+        const { data } = await api.get("/envios/validate-barcode", { params: { code: barcode } });
+        if (!cancelled) {
+          if (data.exists) {
+            setBarcodeWarning(`Este código ya existe en el inventario: "${data.productName}"`);
+          } else {
+            setBarcodeWarning(null);
+          }
+        }
+      } catch (err) {
+        if (!cancelled) console.error(err);
+      }
+    }, 400);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [formData.codigoBarras, shipmentItems]);
 
   useEffect(() => {
     if (searchTerm.length < 3 || !treatAsMedicamento) {
@@ -143,6 +190,10 @@ export default function ProductosStock({ farmacia, onBack }) {
     setQuickAddForm({ cantidad: "", fechaVencimiento: "", lote: "" });
     setLocalSearchTerm("");
     setLocalSuggestions([]);
+    // Auto-generar lote para el quick add
+    api.get("/envios/generate-lote").then(({ data }) => {
+      setQuickAddForm(prev => ({ ...prev, lote: data.lote }));
+    }).catch(() => {});
   };
 
   const handleQuickAddSubmit = (event) => {
@@ -150,6 +201,13 @@ export default function ProductosStock({ farmacia, onBack }) {
     if (!quickAddForm.cantidad || !quickAddForm.fechaVencimiento || !quickAddForm.lote) {
         setFormError("Todos los campos (Cantidad, Vencimiento y Lote) son obligatorios.");
         return;
+    }
+
+    // Validar que el lote no se repita en la lista
+    const loteDup = shipmentItems.find(item => item.lote === quickAddForm.lote);
+    if (loteDup) {
+      setFormError(`El lote "${quickAddForm.lote}" ya existe en la lista actual.`);
+      return;
     }
 
     setShipmentItems((prev) => [
@@ -168,16 +226,49 @@ export default function ProductosStock({ farmacia, onBack }) {
     setQuickAddTarget(null);
   };
 
-  const handleAddItem = (event) => {
+  const handleAddItem = async (event) => {
     event.preventDefault();
     if (!selectedCategoryId) {
       setFormError("Selecciona una categoria para el producto.");
       return;
     }
-    if (!formData.codigoBarras || !formData.nombre || !formData.stockActual || !formData.precioVenta) {
-      setFormError("Completa los campos obligatorios (codigo, nombre, stock, precio de venta).");
+    if (!formData.nombre || !formData.stockActual || !formData.precioVenta) {
+      setFormError("Completa los campos obligatorios (nombre, stock, precio de venta).");
       return;
     }
+
+    const barcode = formData.codigoBarras?.trim();
+
+    // Validar código de barras si se proporcionó
+    if (barcode) {
+      // Verificar en la lista actual
+      const inList = shipmentItems.find(item => item.codigoBarras === barcode);
+      if (inList) {
+        setFormError(`El código de barras "${barcode}" ya está en la lista: "${inList.nombre}".`);
+        return;
+      }
+      // Verificar en el servidor
+      try {
+        const { data } = await api.get("/envios/validate-barcode", { params: { code: barcode } });
+        if (data.exists) {
+          setFormError(`El código de barras "${barcode}" ya existe en el inventario: "${data.productName}". Usa "Buscar en inventario local" para reabastecer.`);
+          return;
+        }
+      } catch (err) {
+        console.error("Error validando barcode:", err);
+      }
+    }
+
+    // Validar que el lote no se repita en la lista
+    const lote = formData.lote?.trim();
+    if (lote) {
+      const loteDup = shipmentItems.find(item => item.lote === lote);
+      if (loteDup) {
+        setFormError(`El lote "${lote}" ya existe en la lista actual.`);
+        return;
+      }
+    }
+
     setShipmentItems((prev) => [
       {
         ...formData,
@@ -191,6 +282,9 @@ export default function ProductosStock({ farmacia, onBack }) {
     setFormData(createEmptyForm());
     setSearchTerm("");
     setSuggestions([]);
+    setBarcodeWarning(null);
+    // Generar nuevo lote para el siguiente producto
+    fetchAutoLote();
   };
 
   const handleRemoveItem = (id) => {
@@ -205,7 +299,10 @@ export default function ProductosStock({ farmacia, onBack }) {
       await api.post("/envios", {
         farmaciaId: farmacia.id,
         titulo: shipmentTitle.trim() || `Envío ${new Date().toLocaleDateString()}`,
-        items: shipmentItems.map(({ categoriaNombre, ...item }) => item),
+        items: shipmentItems.map(({ categoriaNombre, ...item }) => ({
+          ...item,
+          fechaVencimiento: toNoonUTC(item.fechaVencimiento),
+        })),
         applyDirect,
       });
       onBack(); // Go back to the list view
@@ -284,7 +381,7 @@ export default function ProductosStock({ farmacia, onBack }) {
                       >
                         <p className="font-bold text-emerald-900">{item.nombre}</p>
                         <p className="text-xs text-emerald-700">
-                          {item.codigoBarras} | Stock Actual: {item.stockActual} | Cat: {item.categoria?.nombre}
+                          {item.codigoBarras || 'Sin código'} | Stock Actual: {item.stockActual} | Cat: {item.categoria?.nombre}
                         </p>
                       </button>
                     ))}
@@ -331,7 +428,28 @@ export default function ProductosStock({ farmacia, onBack }) {
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Input label="Código de Barras" name="codigoBarras" required value={formData.codigoBarras} onChange={handleFormChange} />
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">Código de Barras (Opcional)</label>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      name="codigoBarras"
+                      value={formData.codigoBarras}
+                      onChange={handleFormChange}
+                      placeholder="Dejar vacío si no tiene"
+                      className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button type="button" onClick={() => setScannerOpen(true)}
+                      className="p-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex-shrink-0"
+                      title="Escanear con cámara">
+                      <Camera size={20} />
+                    </button>
+                  </div>
+                  {barcodeWarning && (
+                    <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                      <AlertTriangle size={12} /> {barcodeWarning}
+                    </p>
+                  )}
+                </div>
                 <Input label="Nombre" name="nombre" required value={formData.nombre} onChange={handleFormChange} />
                 <Input label="Principio Activo" name="principioActivo" value={formData.principioActivo} onChange={handleFormChange} />
                 <Input label="Laboratorio" name="laboratorio" value={formData.laboratorio} onChange={handleFormChange} />
@@ -344,26 +462,54 @@ export default function ProductosStock({ farmacia, onBack }) {
                 <Input label="Precio de Venta (S/)" type="number" step="0.01" name="precioVenta" required value={formData.precioVenta} onChange={handleFormChange} />
                 <Input label="Stock Inicial" type="number" name="stockActual" required value={formData.stockActual} onChange={handleFormChange} />
                 <Input label="Stock Mínimo" type="number" name="stockMinimo" value={formData.stockMinimo} onChange={handleFormChange} />
-                <Input label="Lote" name="lote" value={formData.lote} onChange={handleFormChange} />
+                <div>
+                  <Input label="Lote (Auto-generado)" name="lote" value={formData.lote} onChange={handleFormChange} />
+                  <p className="text-xs text-gray-400 mt-1">El lote se genera automáticamente en serie</p>
+                </div>
                 <Input label="Fecha de Vencimiento" type="date" name="fechaVencimiento" required value={formData.fechaVencimiento} onChange={handleFormChange} />
               </div>
             </>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input label="Código de Barras" name="codigoBarras" required value={formData.codigoBarras} onChange={handleFormChange} />
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1 block">Código de Barras (Opcional)</label>
+                <div className="flex gap-2 items-center">
+                  <input
+                    name="codigoBarras"
+                    value={formData.codigoBarras}
+                    onChange={handleFormChange}
+                    placeholder="Dejar vacío si no tiene"
+                    className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button type="button" onClick={() => setScannerOpen(true)}
+                    className="p-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex-shrink-0"
+                    title="Escanear con cámara">
+                    <Camera size={20} />
+                  </button>
+                </div>
+                {barcodeWarning && (
+                  <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                    <AlertTriangle size={12} /> {barcodeWarning}
+                  </p>
+                )}
+              </div>
               <Input label="Nombre del Producto" name="nombre" required value={formData.nombre} onChange={handleFormChange} />
               <Input label="Descripción" name="descripcion" value={formData.descripcion} onChange={handleFormChange} />
               <Input label="Precio de Costo (S/)" type="number" step="0.01" name="precioCosto" value={formData.precioCosto} onChange={handleFormChange} />
               <Input label="Precio de Venta (S/)" type="number" step="0.01" name="precioVenta" required value={formData.precioVenta} onChange={handleFormChange} />
               <Input label="Stock Inicial" type="number" name="stockActual" required value={formData.stockActual} onChange={handleFormChange} />
               <Input label="Stock Mínimo" type="number" name="stockMinimo" value={formData.stockMinimo} onChange={handleFormChange} />
+              <div>
+                <Input label="Lote (Auto-generado)" name="lote" value={formData.lote} onChange={handleFormChange} />
+                <p className="text-xs text-gray-400 mt-1">El lote se genera automáticamente en serie</p>
+              </div>
             </div>
           )}
 
           {formError && <p className="text-sm text-red-600">{formError}</p>}
 
           <div className="flex justify-end">
-            <Button type="submit" variant="primary">
+            <Button type="submit" variant="primary" disabled={!!barcodeWarning}>
               <Plus size={18} className="mr-2" />
               Añadir Producto a la Lista
             </Button>
@@ -382,9 +528,16 @@ export default function ProductosStock({ farmacia, onBack }) {
                 <div>
                   <p className="font-semibold">{item.nombre}</p>
                   <p className="text-sm text-gray-500">
-                    {item.codigoBarras} | Stock: {item.stockActual} |
+                    {item.codigoBarras ? (
+                      item.codigoBarras
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-amber-600 font-medium">
+                        <AlertTriangle size={12} /> Sin código de barras
+                      </span>
+                    )}
+                    {' | '}Stock: {item.stockActual} |
                     {item.lote && ` Lote: ${item.lote} |`}
-                    {item.fechaVencimiento && ` Vencimiento: ${new Date(item.fechaVencimiento).toLocaleDateString()} |`}
+                    {item.fechaVencimiento && ` Vencimiento: ${formatDateSafe(item.fechaVencimiento)} |`}
                     Costo: S/{item.precioCosto || '0.00'} | Venta: S/{item.precioVenta}
                   </p>
                 </div>
@@ -435,13 +588,16 @@ export default function ProductosStock({ farmacia, onBack }) {
               onChange={(e) => setQuickAddForm({ ...quickAddForm, cantidad: e.target.value })}
               required
             />
-            <Input
-              label="Lote"
-              placeholder="Número de Lote"
-              value={quickAddForm.lote}
-              onChange={(e) => setQuickAddForm({ ...quickAddForm, lote: e.target.value })}
-              required
-            />
+            <div>
+              <Input
+                label="Lote (Auto-generado)"
+                placeholder="Número de Lote"
+                value={quickAddForm.lote}
+                onChange={(e) => setQuickAddForm({ ...quickAddForm, lote: e.target.value })}
+                required
+              />
+              <p className="text-xs text-gray-400 mt-1">El lote se genera automáticamente en serie</p>
+            </div>
             <Input
               label="Fecha de Vencimiento"
               type="date"
@@ -500,7 +656,7 @@ export default function ProductosStock({ farmacia, onBack }) {
               <Input
                 label="Fecha de Vencimiento"
                 type="date"
-                value={editTarget.fechaVencimiento || ""}
+                value={toDateInputValue(editTarget.fechaVencimiento)}
                 onChange={(e) => setEditTarget({ ...editTarget, fechaVencimiento: e.target.value })}
               />
             </div>
@@ -511,6 +667,14 @@ export default function ProductosStock({ farmacia, onBack }) {
           </form>
         </Modal>
       )}
+      <BarcodeScannerModal
+        isOpen={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onResult={(code) => {
+          setFormData(prev => ({ ...prev, codigoBarras: code }));
+          setScannerOpen(false);
+        }}
+      />
     </div>
   );
 }

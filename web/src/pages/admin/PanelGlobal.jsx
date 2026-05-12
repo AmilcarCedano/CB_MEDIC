@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { LayoutDashboard, Wrench, Upload } from "lucide-react";
+import { useState, useEffect } from "react";
+import { LayoutDashboard, Wrench, Upload, Key } from "lucide-react";
 import { Card, Button, Input } from "./components/ui.jsx";
 import { api } from "../../lib/api";
 
@@ -43,6 +43,21 @@ export default function PanelGlobal({
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoError, setLogoError] = useState(null);
   const [logoSuccess, setLogoSuccess] = useState(null);
+  const [logoLoadError, setLogoLoadError] = useState(false);
+
+  // API Key SUNAT/RENIEC
+  const [apiKeyForm, setApiKeyForm] = useState({ value: '', showInput: false });
+  const [apiKeyState, setApiKeyState] = useState({ loading: false, error: null, success: null, hasToken: false, preview: null });
+
+  useEffect(() => {
+    // Cargar estado del token al montar
+    api.get('/config/reniec-token')
+      .then(({ data }) => {
+        setApiKeyState(prev => ({ ...prev, hasToken: data.hasToken, preview: data.tokenPreview }));
+      })
+      .catch(() => {});
+  }, []);
+
 
   const handleLogoUpload = async () => {
     if (!logoFile) return;
@@ -147,6 +162,34 @@ export default function PanelGlobal({
         error: err?.response?.data?.error || "No se pudo actualizar el perfil.",
         success: null,
       });
+    }
+  };
+
+  const handleApiKeySave = async (e) => {
+    e.preventDefault();
+    if (!apiKeyForm.value.trim()) {
+      setApiKeyState(prev => ({ ...prev, error: 'Ingresa una API Key válida.', success: null }));
+      return;
+    }
+    try {
+      setApiKeyState(prev => ({ ...prev, loading: true, error: null, success: null }));
+      const { data } = await api.post('/config/reniec-token', { apiToken: apiKeyForm.value.trim() });
+      setApiKeyState(prev => ({
+        ...prev,
+        loading: false,
+        error: null,
+        success: data.message || 'API Key guardada correctamente.',
+        hasToken: true,
+        preview: `${'*'.repeat(Math.max(0, apiKeyForm.value.trim().length - 6))}${apiKeyForm.value.trim().slice(-6)}`
+      }));
+      setApiKeyForm({ value: '', showInput: false });
+    } catch (err) {
+      setApiKeyState(prev => ({
+        ...prev,
+        loading: false,
+        error: err?.response?.data?.error || 'No se pudo guardar la API Key.',
+        success: null
+      }));
     }
   };
 
@@ -324,15 +367,16 @@ export default function PanelGlobal({
           <div className="flex flex-col items-center gap-2">
             <p className="text-sm font-medium text-gray-700">Logo actual</p>
             <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center border border-gray-200 overflow-hidden">
-              <img
-                src={`${import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : "http://localhost:4000"}/uploads/system-logo.png?t=${Date.now()}`}
-                alt="System Logo"
-                className="max-w-full max-h-full object-contain"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  e.target.parentElement.innerHTML = '<span class="text-gray-400 text-xs text-center px-2">Sin logo personalizado</span>';
-                }}
-              />
+              {logoLoadError ? (
+                <span className="text-gray-400 text-xs text-center px-2">Sin logo personalizado</span>
+              ) : (
+                <img
+                  src={`${import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : "http://localhost:4000"}/uploads/system-logo.png?t=${Date.now()}`}
+                  alt="System Logo"
+                  className="max-w-full max-h-full object-contain"
+                  onError={() => setLogoLoadError(true)}
+                />
+              )}
             </div>
           </div>
           <div className="flex-1 w-full space-y-4">
@@ -426,6 +470,64 @@ export default function PanelGlobal({
             </Button>
           </div>
         </form>
+      </Card>
+
+      <Card>
+        <h2 className="text-2xl font-bold text-gray-900 mb-1 flex items-center gap-2">
+          <Key size={22} className="text-indigo-500" />
+          API de Consulta DNI / RUC
+        </h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Configura la API Key del servicio <span className="font-semibold text-indigo-600">api-codart.cgrt.org</span> para habilitar
+          la búsqueda automática de datos por DNI y RUC en el punto de venta.
+        </p>
+
+        <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-gray-50 border border-gray-200">
+          <div className={`w-3 h-3 rounded-full ${apiKeyState.hasToken ? 'bg-green-500' : 'bg-red-400'}`} />
+          <div>
+            <p className="text-sm font-semibold text-gray-700">
+              Estado: {apiKeyState.hasToken ? 'API Key configurada' : 'Sin API Key configurada'}
+            </p>
+            {apiKeyState.preview && (
+              <p className="text-xs text-gray-500 font-mono">{apiKeyState.preview}</p>
+            )}
+          </div>
+        </div>
+
+        {!apiKeyForm.showInput ? (
+          <Button
+            variant="secondary"
+            onClick={() => setApiKeyForm(prev => ({ ...prev, showInput: true }))}
+          >
+            <Key size={16} />
+            {apiKeyState.hasToken ? 'Cambiar API Key' : 'Configurar API Key'}
+          </Button>
+        ) : (
+          <form className="flex flex-col gap-3" onSubmit={handleApiKeySave}>
+            <Input
+              label="Nueva API Key"
+              type="password"
+              value={apiKeyForm.value}
+              onChange={(e) => setApiKeyForm(prev => ({ ...prev, value: e.target.value }))}
+              placeholder="Pega aquí tu token de api-codart.cgrt.org"
+              required
+            />
+            {apiKeyState.error && <p className="text-sm text-red-600">{apiKeyState.error}</p>}
+            {apiKeyState.success && <p className="text-sm text-green-600">{apiKeyState.success}</p>}
+            <div className="flex gap-3">
+              <Button type="submit" variant="success" disabled={apiKeyState.loading}>
+                {apiKeyState.loading ? 'Guardando...' : 'Guardar API Key'}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setApiKeyForm({ value: '', showInput: false })}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        )}
       </Card>
     </div>
   );

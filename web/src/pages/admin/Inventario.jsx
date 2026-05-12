@@ -1,20 +1,27 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../lib/api';
 import { Card, Button, Input, Modal, Select } from './components/ui';
-import { Search, Edit, Trash, Eye, Calendar, Tag, Check, X as CloseIcon } from 'lucide-react';
+import { Search, Edit, Trash, Eye, Calendar, Tag, Check, X as CloseIcon, AlertTriangle } from 'lucide-react';
+import { formatDateSafe, toDateInputValue, toNoonUTC } from '../../lib/dateUtils';
 
 const BatchRow = ({ batch, isAdmin, onUpdate }) => {
     const [isEditing, setIsEditing] = useState(false);
+
     const [editForm, setEditForm] = useState({
         lote: batch.lote || '',
-        fechaVencimiento: batch.fechaVencimiento ? new Date(batch.fechaVencimiento).toISOString().split('T')[0] : ''
+        fechaVencimiento: toDateInputValue(batch.fechaVencimiento)
     });
     const [loading, setLoading] = useState(false);
+
+    // Formatear fecha sin timezone offset
 
     const handleSave = async () => {
         setLoading(true);
         try {
-            await api.put(`/products/${batch.id}`, editForm);
+            await api.put(`/products/${batch.id}`, {
+                lote: editForm.lote,
+                fechaVencimiento: toNoonUTC(editForm.fechaVencimiento)
+            });
             setIsEditing(false);
             onUpdate();
         } catch (error) {
@@ -71,7 +78,7 @@ const BatchRow = ({ batch, isAdmin, onUpdate }) => {
         <tr className="border-t">
             <td className="p-2 font-mono text-indigo-600">{batch.lote || '---'}</td>
             <td className="p-2 text-center font-bold">{batch.stockActual}</td>
-            <td className="p-2 text-gray-600">{batch.fechaVencimiento ? new Date(batch.fechaVencimiento).toLocaleDateString() : 'N/A'}</td>
+            <td className="p-2 text-gray-600">{formatDateSafe(batch.fechaVencimiento)}</td>
             {isAdmin && (
                 <td className="p-2 text-center">
                     <button 
@@ -125,21 +132,45 @@ const Inventario = ({ farmacia, user }) => {
     }
   }, [farmacia]);
 
+  // Validar código de barras al editar (solo local, sin re-render loop)
+  const [barcodeEditError, setBarcodeEditError] = useState(null);
+  useEffect(() => {
+    if (!editingProduct) { setBarcodeEditError(null); return; }
+    const barcode = editingProduct.codigoBarras?.trim();
+    if (!barcode) { setBarcodeEditError(null); return; }
+    const match = products.find(p => p.codigoBarras === barcode && p.id !== editingProduct.id);
+    setBarcodeEditError(match ? `Ya existe otro producto con este código: "${match.nombre}"` : null);
+  }, [editingProduct?.codigoBarras, editingProduct?.id, products]);
+
   const handleUpdateProduct = async (e) => {
     e.preventDefault();
     if (!editingProduct) return;
+    if (barcodeEditError) return;
 
     try {
-      const { id, ...data } = editingProduct;
+      const id = editingProduct.id;
       
       // Validar que no se reduzca el stock si no es admin
       const originalProduct = products.find(p => p.id === id);
-      if (user?.role !== 'ADMIN' && originalProduct && Number(data.stockActual) < originalProduct.stockActual) {
+      if (user?.role !== 'ADMIN' && originalProduct && Number(editingProduct.stockActual) < originalProduct.stockActual) {
         alert(`No tienes permiso para reducir el stock. Solo puedes aumentarlo. El stock actual es ${originalProduct.stockActual}.`);
         return;
       }
 
-      await api.put(`/products/${id}`, { ...data, farmaciaId: farmacia.id });
+      // Solo enviar campos válidos al backend
+      const payload = {
+        nombre: editingProduct.nombre,
+        categoriaId: editingProduct.categoriaId,
+        stockActual: Number(editingProduct.stockActual),
+        stockMinimo: Number(editingProduct.stockMinimo || 0),
+        precioVenta: Number(editingProduct.precioVenta),
+        codigoBarras: editingProduct.codigoBarras || '',
+      };
+      if (user?.role === 'ADMIN' && editingProduct.precioCosto !== undefined) {
+        payload.precioCosto = Number(editingProduct.precioCosto || 0);
+      }
+
+      await api.put(`/products/${id}`, payload);
       setEditingProduct(null);
       fetchProducts();
     } catch (err) {
@@ -232,7 +263,15 @@ const Inventario = ({ farmacia, user }) => {
                 <tr key={p.id} className="border-b hover:bg-gray-50 transition-colors">
                   <td className="p-4">
                     <div className="font-bold text-indigo-900">{p.nombre}</div>
-                    <div className="text-xs text-gray-500 flex items-center gap-1"><Tag size={12} /> {p.categoria?.nombre} • {p.codigoBarras || 'Sin código'}</div>
+                    <div className="text-xs text-gray-500 flex items-center gap-1">
+                      <Tag size={12} /> {p.categoria?.nombre} • {p.codigoBarras ? (
+                        <span className="font-mono">{p.codigoBarras}</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full font-bold">
+                          <AlertTriangle size={10} /> Sin código de barras
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="p-4">
                     <span className={`px-2 py-1 rounded text-sm font-black ${p.stockActual <= (p.stockMinimo || 0) ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
@@ -240,11 +279,14 @@ const Inventario = ({ farmacia, user }) => {
                     </span>
                   </td>
                   <td className="p-4">
-                    {p.fechaVencimiento ? (
-                      <div className={`flex items-center gap-1 text-sm font-medium ${new Date(p.fechaVencimiento) < new Date(Date.now() + 60*24*60*60*1000) ? 'text-red-600' : 'text-gray-600'}`}>
-                        <Calendar size={14} /> {new Date(p.fechaVencimiento).toLocaleDateString()}
-                      </div>
-                    ) : <span className="text-gray-400 text-xs">Sin fecha</span>}
+                    {p.fechaVencimiento ? (() => {
+                      const isExpiringSoon = new Date(p.fechaVencimiento) < new Date(Date.now() + 60*24*60*60*1000);
+                      return (
+                        <div className={`flex items-center gap-1 text-sm font-medium ${isExpiringSoon ? 'text-red-600' : 'text-gray-600'}`}>
+                          <Calendar size={14} /> {formatDateSafe(p.fechaVencimiento)}
+                        </div>
+                      );
+                    })() : <span className="text-gray-400 text-xs">Sin fecha</span>}
                   </td>
                   {user?.role === 'ADMIN' && (
                     <td className="p-4 font-bold text-green-700">S/ {Number(p.precioVenta || 0).toFixed(2)}</td>
@@ -295,7 +337,7 @@ const Inventario = ({ farmacia, user }) => {
                       </thead>
                       <tbody>
                           {currentData.batches.map((b) => (
-                              <BatchRow key={b.id} batch={b} isAdmin={user?.role === 'ADMIN'} onUpdate={fetchProducts} />
+                              <BatchRow key={`${b.id}-${b.lote}-${b.fechaVencimiento}`} batch={b} isAdmin={user?.role === 'ADMIN'} onUpdate={fetchProducts} />
                           ))}
                       </tbody>
                   </table>
@@ -326,10 +368,13 @@ const Inventario = ({ farmacia, user }) => {
               )}
               <Input label="Precio de Venta (S/)" type="number" step="0.01" value={editingProduct.precioVenta} onChange={(e) => setEditingProduct({ ...editingProduct, precioVenta: Number(e.target.value) })} required />
             </div>
-            <Input label="Código de Barras" value={editingProduct.codigoBarras} onChange={(e) => setEditingProduct({ ...editingProduct, codigoBarras: e.target.value })} />
+            <Input label="Código de Barras" value={editingProduct.codigoBarras || ''} onChange={(e) => setEditingProduct({ ...editingProduct, codigoBarras: e.target.value })} placeholder="Dejar vacío si no tiene" />
+            {barcodeEditError && (
+              <p className="text-xs text-red-600 flex items-center gap-1"><AlertTriangle size={12} /> {barcodeEditError}</p>
+            )}
             <div className="flex justify-end gap-2 pt-4">
               <Button type="button" variant="secondary" onClick={() => setEditingProduct(null)}>Cancelar</Button>
-              <Button type="submit">Guardar Cambios</Button>
+              <Button type="submit" disabled={!!barcodeEditError}>Guardar Cambios</Button>
             </div>
           </form>
         </Modal>
