@@ -112,7 +112,7 @@ async function main() {
     },
   ];
 
-  await prisma.productoMaestro.createMany({
+  await prisma.productomaestro.createMany({
     data: masterProducts,
     skipDuplicates: true,
   });
