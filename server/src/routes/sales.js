@@ -64,7 +64,7 @@ router.get('/', async (req, res) => {
     res.json(serialized);
   } catch (error) {
     console.error('Error fetching comprobantes:', error);
-    res.status(500).json({ error: 'Error fetching comprobantes', details: error.message });
+    res.status(500).json({ error: 'Error fetching comprobantes' });
   }
 });
 
@@ -219,7 +219,7 @@ router.post('/suggestions', async (req, res) => {
 
   } catch (error) {
     console.error('Error fetching suggestions:', error);
-    res.status(500).json({ error: 'Error fetching suggestions', details: error.message });
+    res.status(500).json({ error: 'Error fetching suggestions' });
   }
 });
 
@@ -596,7 +596,7 @@ router.post('/', async (req, res) => {
 
   } catch (error) {
     console.error('Error procesando la venta:', error);
-    res.status(500).json({ error: 'Error procesando la venta', details: error.message });
+    res.status(500).json({ error: 'Error procesando la venta' });
   }
 });
 
@@ -741,7 +741,7 @@ router.post('/return/:id', async (req, res) => {
 
   } catch (error) {
     console.error('Error procesando devolución:', error);
-    res.status(500).json({ error: 'Error procesando devolución', details: error.message });
+    res.status(500).json({ error: 'Error procesando devolución' });
   }
 });
 
@@ -811,7 +811,7 @@ router.delete('/:id', requireAdmin, async (req, res) => {
 
   } catch (error) {
     console.error('Error anulando el comprobante:', error);
-    res.status(500).json({ error: 'Error anulando el comprobante', details: error.message });
+    res.status(500).json({ error: 'Error anulando el comprobante' });
   }
 });
 
@@ -845,7 +845,7 @@ router.delete('/:id/permanent', requireAdmin, async (req, res) => {
     res.json({ message: 'Comprobante eliminado permanentemente', comprobante: result });
   } catch (error) {
     console.error('Error eliminando el comprobante:', error);
-    res.status(500).json({ error: 'No se pudo eliminar el comprobante', details: error.message });
+    res.status(500).json({ error: 'No se pudo eliminar el comprobante' });
   }
 });
 

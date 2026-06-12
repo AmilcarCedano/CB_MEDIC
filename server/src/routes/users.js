@@ -114,8 +114,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/users - Crear usuario (solo ADMIN)
-// POST /api/users - Crear usuario (abierto a todos los autenticados, segun requerimiento)
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
   try {
     const { username, fullName, password, farmaciaId, role = 'VENDEDOR', horario } = req.body || {};
 
@@ -180,7 +179,7 @@ router.post('/', async (req, res) => {
 // PUT /api/users/:id - Actualizar usuario
 // Admin puede editar cualquier usuario
 // Vendedor solo puede editar su propio perfil (no su rol ni farmacia)
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) return res.status(400).json({ error: 'ID invalido' });

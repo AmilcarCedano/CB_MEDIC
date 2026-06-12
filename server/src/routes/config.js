@@ -22,14 +22,18 @@ const storage = multer.diskStorage({
     }
 });
 
+const ALLOWED_EXT = ['.png', '.jpg', '.jpeg', '.webp'];
+const ALLOWED_MIME = ['image/png', 'image/jpeg', 'image/webp'];
+
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit
     fileFilter: (req, file, cb) => {
-        if (file.mimetype.startsWith('image/')) {
+        const ext = path.extname(file.originalname || '').toLowerCase();
+        if (ALLOWED_EXT.includes(ext) && ALLOWED_MIME.includes(file.mimetype)) {
             cb(null, true);
         } else {
-            cb(new Error('Solo se permiten imágenes'));
+            cb(new Error('Solo se permiten imágenes PNG, JPG o WEBP'));
         }
     }
 });

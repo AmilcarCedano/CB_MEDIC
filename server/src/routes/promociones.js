@@ -43,7 +43,7 @@ router.get('/', async (req, res) => {
     res.json(serialized);
   } catch (error) {
     console.error('Error fetching promociones:', error);
-    res.status(500).json({ error: 'Error fetching promociones', details: error.message });
+    res.status(500).json({ error: 'Error fetching promociones' });
   }
 });
 
@@ -81,7 +81,7 @@ router.post('/', async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating promocion:', error);
-    res.status(500).json({ error: 'Error creando la promoción', details: error.message });
+    res.status(500).json({ error: 'Error creando la promoción' });
   }
 });
 
@@ -122,7 +122,7 @@ router.put('/:id', async (req, res) => {
     res.json({ ...updated, precioPromo: parseFloat(updated.precioPromo) });
   } catch (error) {
     console.error('Error updating promocion:', error);
-    res.status(500).json({ error: 'Error actualizando la promoción', details: error.message });
+    res.status(500).json({ error: 'Error actualizando la promoción' });
   }
 });
 
@@ -138,7 +138,7 @@ router.delete('/:id', async (req, res) => {
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting promocion:', error);
-    res.status(500).json({ error: 'Error eliminando la promoción', details: error.message });
+    res.status(500).json({ error: 'Error eliminando la promoción' });
   }
 });
 

@@ -25,17 +25,8 @@ router.post('/login', async (req, res) => {
     try {
       passwordValid = await bcrypt.compare(password, user.passwordHash);
     } catch (bcryptErr) {
-      // Fallback for plain text passwords (legacy data)
-      if (user.passwordHash === password) {
-        console.warn(`[WARN] Usuario ${user.username} tiene contraseña en texto plano.`);
-        passwordValid = true;
-      }
-    }
-
-    // Additional fallback if bcrypt returns false but password matches plain text
-    if (!passwordValid && user.passwordHash === password) {
-      console.warn(`[WARN] Usuario ${user.username} validado con texto plano fallback.`);
-      passwordValid = true;
+      console.error('[Auth] Error comparando contraseña:', bcryptErr);
+      passwordValid = false;
     }
 
     if (!passwordValid) {

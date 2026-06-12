@@ -14,7 +14,7 @@ router.get('/', async (req, res) => {
     });
     res.json(clients);
   } catch (error) {
-    res.status(500).json({ error: 'Error fetching clients', details: error.message });
+    res.status(500).json({ error: 'Error fetching clients' });
   }
 });
 
@@ -53,7 +53,7 @@ router.get('/search', async (req, res) => {
     res.json(clients);
   } catch (error) {
     console.error('Error searching clients:', error);
-    res.status(500).json({ error: 'Error searching clients', details: error.message });
+    res.status(500).json({ error: 'Error searching clients' });
   }
 });
 
@@ -74,7 +74,7 @@ router.get('/:id', async (req, res) => {
     }
     res.json(client);
   } catch (error) {
-    res.status(500).json({ error: 'Error fetching client', details: error.message });
+    res.status(500).json({ error: 'Error fetching client' });
   }
 });
 
@@ -115,7 +115,7 @@ router.post('/', async (req, res) => {
     if (error.code === 'P2002') {
       return res.status(409).json({ error: 'Client with this document number already exists for this pharmacy.' });
     }
-    res.status(500).json({ error: 'Error creating client', details: error.message });
+    res.status(500).json({ error: 'Error creating client' });
   }
 });
 
@@ -165,7 +165,7 @@ router.put('/:id', async (req, res) => {
     if (error.code === 'P2002') {
       return res.status(409).json({ error: 'Client with this document number already exists for this pharmacy.' });
     }
-    res.status(500).json({ error: 'Error updating client', details: error.message });
+    res.status(500).json({ error: 'Error updating client' });
   }
 });
 
@@ -199,7 +199,7 @@ router.delete('/:id', requireAdmin, async (req, res) => {
 
     res.status(204).send();
   } catch (error) {
-    res.status(500).json({ error: 'Error deleting client', details: error.message });
+    res.status(500).json({ error: 'Error deleting client' });
   }
 });
 
@@ -238,7 +238,7 @@ router.get('/:id/history', async (req, res) => {
     res.json(history);
   } catch (error) {
     console.error('Error fetching client history:', error);
-    res.status(500).json({ error: 'Error fetching client history', details: error.message });
+    res.status(500).json({ error: 'Error fetching client history' });
   }
 });
 
@@ -271,7 +271,7 @@ router.get('/:id/habituales', async (req, res) => {
     res.json(habituales);
   } catch (error) {
     console.error('Error fetching habitual items:', error);
-    res.status(500).json({ error: 'Error fetching habitual items', details: error.message });
+    res.status(500).json({ error: 'Error fetching habitual items' });
   }
 });
 
@@ -321,7 +321,7 @@ router.post('/habitual', async (req, res) => {
     }
   } catch (error) {
     console.error('Error toggling habitual item:', error);
-    res.status(500).json({ error: 'Error toggling habitual item', details: error.message });
+    res.status(500).json({ error: 'Error toggling habitual item' });
   }
 });
 
@@ -346,7 +346,7 @@ router.delete('/habitual/:id', async (req, res) => {
     });
     res.json({ message: 'Item habitual eliminado' });
   } catch (error) {
-    res.status(500).json({ error: 'Error deleting habitual item', details: error.message });
+    res.status(500).json({ error: 'Error deleting habitual item' });
   }
 });
 

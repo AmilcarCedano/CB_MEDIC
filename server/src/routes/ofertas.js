@@ -58,7 +58,7 @@ router.get('/', async (req, res) => {
     res.json(rules);
   } catch (error) {
     console.error('Error fetching sales rules:', error);
-    res.status(500).json({ error: 'Error fetching sales rules', details: error.message });
+    res.status(500).json({ error: 'Error fetching sales rules' });
   }
 });
 
@@ -107,7 +107,7 @@ router.delete('/:id', async (req, res) => {
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting sales rule:', error);
-    res.status(500).json({ error: 'Error deleting sales rule', details: error.message });
+    res.status(500).json({ error: 'Error deleting sales rule' });
   }
 });
 
@@ -136,7 +136,7 @@ router.get('/productos', async (req, res) => {
     res.json(serialized);
   } catch (error) {
     console.error('Error fetching productos para reglas:', error);
-    res.status(500).json({ error: 'Error fetching products', details: error.message });
+    res.status(500).json({ error: 'Error fetching products' });
   }
 });
 
@@ -146,7 +146,7 @@ router.get('/lealtad', async (req, res) => {
     res.json(config);
   } catch (error) {
     console.error('Error fetching loyalty settings:', error);
-    res.status(500).json({ error: 'Error fetching loyalty settings', details: error.message });
+    res.status(500).json({ error: 'Error fetching loyalty settings' });
   }
 });
 
@@ -186,7 +186,7 @@ router.post('/lealtad', async (req, res) => {
     });
   } catch (error) {
     console.error('Error updating loyalty settings:', error);
-    res.status(500).json({ error: 'Error updating loyalty settings', details: error.message });
+    res.status(500).json({ error: 'Error updating loyalty settings' });
   }
 });
 

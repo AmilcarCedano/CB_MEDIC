@@ -191,10 +191,9 @@ router.delete('/:id', requireAdmin, async (req, res) => {
       return res.status(204).end();
     } catch (txErr) {
       console.error(`[DELETE ERROR AT STEP: ${currentStep}]`, txErr);
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: 'No se pudo eliminar la farmacia debido a registros vinculados complejos.',
-        step: currentStep,
-        details: txErr.message 
+        step: currentStep
       });
     }
   } catch (err) {
@@ -202,9 +201,8 @@ router.delete('/:id', requireAdmin, async (req, res) => {
     if (err.code === 'P2025') {
       return res.status(404).json({ error: 'Farmacia no encontrada' });
     }
-    return res.status(500).json({ 
-      error: 'Error interno de servidor.',
-      details: err.message 
+    return res.status(500).json({
+      error: 'Error interno de servidor.'
     });
   }
 });

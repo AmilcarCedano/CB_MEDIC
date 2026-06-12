@@ -24,7 +24,7 @@ router.get('/categorias', async (req, res) => {
         res.json(categorias);
     } catch (error) {
         console.error('Error fetching categorías:', error);
-        res.status(500).json({ error: 'Error fetching categorías', details: error.message });
+        res.status(500).json({ error: 'Error fetching categorías' });
     }
 });
 
@@ -44,7 +44,7 @@ router.post('/categorias', async (req, res) => {
         res.json(categoria);
     } catch (error) {
         console.error('Error creating categoría:', error);
-        res.status(500).json({ error: 'Error creating categoría', details: error.message });
+        res.status(500).json({ error: 'Error creating categoría' });
     }
 });
 
@@ -61,7 +61,7 @@ router.put('/categorias/:id', async (req, res) => {
         res.json(categoria);
     } catch (error) {
         console.error('Error updating categoría:', error);
-        res.status(500).json({ error: 'Error updating categoría', details: error.message });
+        res.status(500).json({ error: 'Error updating categoría' });
     }
 });
 
@@ -77,7 +77,7 @@ router.delete('/categorias/:id', async (req, res) => {
         res.json({ message: 'Categoría eliminada' });
     } catch (error) {
         console.error('Error deleting categoría:', error);
-        res.status(500).json({ error: 'Error deleting categoría', details: error.message });
+        res.status(500).json({ error: 'Error deleting categoría' });
     }
 });
 
@@ -103,7 +103,7 @@ router.get('/', async (req, res) => {
         res.json(servicios);
     } catch (error) {
         console.error('Error fetching servicios:', error);
-        res.status(500).json({ error: 'Error fetching servicios', details: error.message });
+        res.status(500).json({ error: 'Error fetching servicios' });
     }
 });
 
@@ -119,7 +119,7 @@ router.get('/:id', async (req, res) => {
         res.json(servicio);
     } catch (error) {
         console.error('Error fetching servicio:', error);
-        res.status(500).json({ error: 'Error fetching servicio', details: error.message });
+        res.status(500).json({ error: 'Error fetching servicio' });
     }
 });
 
@@ -162,7 +162,7 @@ router.post('/', async (req, res) => {
         res.json(servicio);
     } catch (error) {
         console.error('Error creating servicio:', error);
-        res.status(500).json({ error: 'Error creating servicio', details: error.message });
+        res.status(500).json({ error: 'Error creating servicio' });
     }
 });
 
@@ -205,7 +205,7 @@ router.put('/:id', async (req, res) => {
         res.json(servicio);
     } catch (error) {
         console.error('Error updating servicio:', error);
-        res.status(500).json({ error: 'Error updating servicio', details: error.message });
+        res.status(500).json({ error: 'Error updating servicio' });
     }
 });
 
@@ -221,7 +221,7 @@ router.delete('/:id', async (req, res) => {
         res.json({ message: 'Servicio eliminado' });
     } catch (error) {
         console.error('Error deleting servicio:', error);
-        res.status(500).json({ error: 'Error deleting servicio', details: error.message });
+        res.status(500).json({ error: 'Error deleting servicio' });
     }
 });
 
@@ -253,7 +253,7 @@ router.get('/estadisticas/rentabilidad', async (req, res) => {
         });
     } catch (error) {
         console.error('Error fetching estadísticas:', error);
-        res.status(500).json({ error: 'Error fetching estadísticas', details: error.message });
+        res.status(500).json({ error: 'Error fetching estadísticas' });
     }
 });
 

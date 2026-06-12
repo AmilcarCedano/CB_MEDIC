@@ -26,7 +26,19 @@ const auditoriaRouter = require('./routes/auditoria');
 const promocionesRouter = require('./routes/promociones');
 
 const app = express();
-app.use(cors({ origin: true, credentials: true }));
+app.set('trust proxy', 1);
+
+const DEFAULT_ORIGINS = ['https://cbmedic.duckdns.org', 'http://localhost:5173', 'http://localhost:4173'];
+const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+const origins = allowedOrigins.length ? allowedOrigins : DEFAULT_ORIGINS;
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);            // curl / same-origin / server-to-server
+    if (origins.includes(origin)) return cb(null, true);
+    return cb(null, false);                        // deny without throwing (no 500s)
+  },
+  credentials: true,
+}));
 app.use(helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
@@ -34,12 +46,31 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('dev'));
 
+// Rate limiting
+const rateLimit = require('express-rate-limit');
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas solicitudes. Intenta nuevamente en unos instantes.' },
+});
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos de inicio de sesión. Intenta nuevamente en 15 minutos.' },
+});
+app.use(globalLimiter);
+app.use('/auth/login', loginLimiter);
+
 // Rutas públicas (no requieren autenticación)
 app.use('/health', healthRouter);
-app.use('/reniec', reniecRouter);
 app.use('/auth', authRouter);
 
 // Rutas protegidas (requieren autenticación JWT)
+app.use('/reniec', authenticate, reniecRouter);
 app.use('/caja', authenticate, cajaRouter);
 app.use('/farmacias', authenticate, farmaciasRouter);
 app.use('/categories', authenticate, categoriesRouter);

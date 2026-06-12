@@ -35,7 +35,7 @@ router.get('/turno-activo', async (req, res) => {
     res.json(turno);
   } catch (error) {
     console.error('Error fetching turno activo:', error);
-    res.status(500).json({ error: 'Error al obtener turno activo', details: error.message });
+    res.status(500).json({ error: 'Error al obtener turno activo' });
   }
 });
 
@@ -84,7 +84,7 @@ router.post('/abrir-turno', async (req, res) => {
     res.json(turno);
   } catch (error) {
     console.error('Error opening turno:', error);
-    res.status(500).json({ error: 'Error al abrir turno', details: error.message });
+    res.status(500).json({ error: 'Error al abrir turno' });
   }
 });
 
@@ -173,7 +173,7 @@ router.post('/cerrar-turno/:id', async (req, res) => {
 
   } catch (error) {
     console.error('Error al cerrar turno:', error);
-    res.status(500).json({ error: 'Error al cerrar turno', details: error.message });
+    res.status(500).json({ error: 'Error al cerrar turno' });
   }
 });
 
@@ -231,7 +231,7 @@ router.post('/registrar-egreso', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Error registering egreso:', error);
-    res.status(500).json({ error: 'Error al registrar egreso', details: error.message });
+    res.status(500).json({ error: 'Error al registrar egreso' });
   }
 });
 
@@ -282,7 +282,7 @@ router.put('/egreso/:id', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Error updating egreso:', error);
-    res.status(500).json({ error: 'Error al actualizar egreso', details: error.message });
+    res.status(500).json({ error: 'Error al actualizar egreso' });
   }
 });
 
@@ -322,7 +322,7 @@ router.delete('/egreso/:id', async (req, res) => {
     res.json({ message: 'Egreso eliminado correctamente' });
   } catch (error) {
     console.error('Error deleting egreso:', error);
-    res.status(500).json({ error: 'Error al eliminar egreso', details: error.message });
+    res.status(500).json({ error: 'Error al eliminar egreso' });
   }
 });
 
@@ -356,7 +356,7 @@ router.get('/historial', async (req, res) => {
     res.json(turnos);
   } catch (error) {
     console.error('Error fetching historial:', error);
-    res.status(500).json({ error: 'Error al obtener historial', details: error.message });
+    res.status(500).json({ error: 'Error al obtener historial' });
   }
 });
 
@@ -394,7 +394,7 @@ router.get('/egresos', async (req, res) => {
     res.json(egresos);
   } catch (error) {
     console.error('Error fetching egresos:', error);
-    res.status(500).json({ error: 'Error al obtener egresos', details: error.message });
+    res.status(500).json({ error: 'Error al obtener egresos' });
   }
 });
 
@@ -448,7 +448,7 @@ router.get('/monitor', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching monitor:', error);
-    res.status(500).json({ error: 'Error al obtener estado', details: error.message });
+    res.status(500).json({ error: 'Error al obtener estado' });
   }
 });
 
@@ -482,7 +482,7 @@ router.put('/actualizar-ventas/:id', async (req, res) => {
     res.json(turnoActualizado);
   } catch (error) {
     console.error('Error updating ventas:', error);
-    res.status(500).json({ error: 'Error al actualizar ventas', details: error.message });
+    res.status(500).json({ error: 'Error al actualizar ventas' });
   }
 });
 

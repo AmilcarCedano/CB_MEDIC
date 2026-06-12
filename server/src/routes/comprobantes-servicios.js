@@ -56,7 +56,7 @@ router.get('/', async (req, res) => {
         res.json(comprobantes);
     } catch (error) {
         console.error('Error fetching comprobantes:', error);
-        res.status(500).json({ error: 'Error fetching comprobantes', details: error.message });
+        res.status(500).json({ error: 'Error fetching comprobantes' });
     }
 });
 
@@ -80,7 +80,7 @@ router.get('/:id', async (req, res) => {
         res.json(comprobante);
     } catch (error) {
         console.error('Error fetching comprobante:', error);
-        res.status(500).json({ error: 'Error fetching comprobante', details: error.message });
+        res.status(500).json({ error: 'Error fetching comprobante' });
     }
 });
 
@@ -187,7 +187,7 @@ router.post('/', async (req, res) => {
         res.json(comprobanteCompleto);
     } catch (error) {
         console.error('Error creating comprobante:', error);
-        res.status(500).json({ error: 'Error creating comprobante', details: error.message });
+        res.status(500).json({ error: 'Error creating comprobante' });
     }
 });
 
@@ -234,7 +234,7 @@ TOTAL: S/${comprobante.total}
         res.send(pdfContent);
     } catch (error) {
         console.error('Error generating PDF:', error);
-        res.status(500).json({ error: 'Error generating PDF', details: error.message });
+        res.status(500).json({ error: 'Error generating PDF' });
     }
 });
 
@@ -357,7 +357,7 @@ router.get('/:id/xml', async (req, res) => {
         res.send(xmlContent);
     } catch (error) {
         console.error('Error generating XML:', error);
-        res.status(500).json({ error: 'Error generating XML', details: error.message });
+        res.status(500).json({ error: 'Error generating XML' });
     }
 });
 
@@ -402,7 +402,7 @@ router.post('/:id/cancel', requireAdmin, async (req, res) => {
         res.json({ message: 'Comprobante cancelado exitosamente' });
     } catch (error) {
         console.error('Error canceling comprobante:', error);
-        res.status(500).json({ error: 'Error canceling comprobante', details: error.message });
+        res.status(500).json({ error: 'Error canceling comprobante' });
     }
 });
 
