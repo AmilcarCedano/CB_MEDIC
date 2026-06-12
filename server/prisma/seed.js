@@ -35,25 +35,12 @@ async function main() {
     },
   });
 
-  const vendedorPlain = '123';
-  const vendedorPass = await bcrypt.hash(vendedorPlain, 10);
-  await prisma.user.upsert({
-    where: { username: 'vendedor' },
-    update: {
-      fullName: 'Vendedor Demo',
-      passwordHash: vendedorPass,
-      role: 'VENDEDOR',
-      isActive: true,
-      farmaciaId: farmacia.id,
-    },
-    create: {
-      username: 'vendedor',
-      fullName: 'Vendedor Demo',
-      passwordHash: vendedorPass,
-      role: 'VENDEDOR',
-      isActive: true,
-      farmaciaId: farmacia.id,
-    },
+  // El usuario demo "vendedor" ya no se crea. Si existe de un seed anterior,
+  // se desactiva para que no pueda iniciar sesión (no se borra por integridad
+  // referencial con ventas/caja existentes).
+  await prisma.user.updateMany({
+    where: { username: 'vendedor', fullName: 'Vendedor Demo' },
+    data: { isActive: false },
   });
 
   const defaultCategories = [
