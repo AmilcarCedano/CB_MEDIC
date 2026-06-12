@@ -22,7 +22,7 @@ export default function Categorias({ farmacia }) {
     try {
       const { data } = await api.get("/categories", { params: { farmaciaId: farmacia.id } });
       setCategories(data);
-    } catch (err) {
+    } catch {
       setError("No se pudieron cargar las categorias.");
     } finally {
       setLoading(false);

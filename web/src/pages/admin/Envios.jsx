@@ -54,7 +54,7 @@ const Envios = ({ farmacia, user }) => {
     try {
       const { data } = await api.get(`/envios?farmaciaId=${farmacia.id}`);
       setEnvios(data);
-    } catch (err) {
+    } catch {
       setError('No se pudieron cargar los envíos.');
     } finally {
       setLoading(false);

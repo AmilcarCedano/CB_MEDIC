@@ -11,8 +11,6 @@ import {
 } from 'recharts';
 
 import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
 
@@ -38,7 +36,7 @@ const CustomTooltip = ({ active, payload }) => {
   return null;
 };
 
-const DashboardFarmacia = ({ farmacia, user }) => {
+const DashboardFarmacia = ({ farmacia }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -62,7 +60,7 @@ const DashboardFarmacia = ({ farmacia, user }) => {
       if (hasta) params.append('hasta', hasta);
       const { data: result } = await api.get(`/dashboard/stats?${params}`);
       setData(result);
-    } catch (err) {
+    } catch {
       setError('No se pudieron cargar las estadísticas.');
     } finally {
       setLoading(false);
@@ -92,7 +90,7 @@ const DashboardFarmacia = ({ farmacia, user }) => {
 
   const exportToExcel = () => {
     if (!data) return;
-    const { kpis, ventasPorMetodo, topProductos, topClientes } = data;
+    const { kpis, ventasPorMetodo, topProductos } = data;
 
     const workbook = XLSX.utils.book_new();
 
@@ -142,10 +140,6 @@ const DashboardFarmacia = ({ farmacia, user }) => {
     XLSX.utils.book_append_sheet(workbook, productsSheet, "Top Productos");
 
     XLSX.writeFile(workbook, `Reporte_${farmacia.nombre}_${desde}_${hasta}.xlsx`);
-  };
-
-  const exportToPDF = () => {
-    // PDF button removed as requested
   };
 
   if (loading && !data) {

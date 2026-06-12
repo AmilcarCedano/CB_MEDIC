@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Calculator, ShoppingCart, User, Search, X, DollarSign, CreditCard, Send, Smartphone, Banknote, ClipboardList, FileText, FileSearch, Zap, AlertTriangle, Lightbulb, Plus, Minus, Award, Tag, Clock, Stethoscope, Percent, Star, Edit, Calendar } from 'lucide-react';
 import { api } from '../../lib/api';
-import { generateComprobantePDF, generateTicketPDF } from '../../lib/pdfGenerator';
+import { generateTicketPDF } from '../../lib/pdfGenerator';
 
 // --- PLACEHOLDER UI COMPONENTS ---
 const Card = ({ children, className = '', onClick = null }) => <div onClick={onClick} className={`bg-white rounded-xl shadow-lg p-4 md:p-6 ${className}`}>{children}</div>;
@@ -139,21 +139,17 @@ const docTypeOptions = [
 
 
 export default function SalesPOS({ farmacia, user }) {
-    if (!farmacia?.id) {
-        return <Card><p>Seleccione una farmacia para empezar a vender.</p></Card>;
-    }
-
     const [searchTerm, setSearchTerm] = useState('');
     const [cart, setCart] = useState([]);
     const [client, setClient] = useState(MOCK_CLIENT);
     const [paymentMethod, setPaymentMethod] = useState('Efectivo');
     const [amountReceived, setAmountReceived] = useState(0);
-    const [pointsToRedeem, setPointsToRedeem] = useState('0');
-    const [pointsError, setPointsError] = useState(null);
+    const [, setPointsToRedeem] = useState('0');
+    const [, setPointsError] = useState(null);
     const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
     const [isClientModalOpen, setIsClientModalOpen] = useState(false);
     const [documentType, setDocumentType] = useState('Boleta');
-    const [isSaleCompletedModalOpen, setIsSaleCompletedModalOpen] = useState(false);
+    const [, setIsSaleCompletedModalOpen] = useState(false);
 
     const [suggestions, setSuggestions] = useState({ promotions: [], recommendations: [] });
     const [appliedPoints, setAppliedPoints] = useState(0);
@@ -188,6 +184,9 @@ export default function SalesPOS({ farmacia, user }) {
     // Estado para turno de caja
     const [turnoActivo, setTurnoActivo] = useState(null);
     const [loadingTurno, setLoadingTurno] = useState(true);
+
+    // Guard contra doble envío de venta
+    const isSubmittingSaleRef = useRef(false);
 
     const aggregatedProducts = useMemo(() => {
         if (!products || products.length === 0) return [];
@@ -701,22 +700,6 @@ export default function SalesPOS({ farmacia, user }) {
         setAppliedPoints(0);
     };
 
-    // Funciones de Puntos para Canje
-    const handleApplyPoints = () => {
-        if (!loyaltyEnabled) return;
-        if (canjeablePoints <= 0) return;
-        setAppliedPoints(canjeablePoints);
-        setIsCheckoutModalOpen(false);
-        setIsCheckoutModalOpen(true); // Forzar re-renderizado de total en modal
-    };
-
-    const handleRemovePoints = () => {
-        setAppliedPoints(0);
-        setIsCheckoutModalOpen(false);
-        setIsCheckoutModalOpen(true); // Forzar re-renderizado de total en modal
-    };
-
-
     // Cálculos de Totales
     const initialTotal = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.quantity, 0), [cart]);
 
@@ -747,18 +730,18 @@ export default function SalesPOS({ farmacia, user }) {
     
     // El canje útil es el mínimo entre: puntos del cliente, puntos que cubren el total, y el límite configurado.
     // Esto evita que el usuario desperdicie puntos si tiene un saldo muy alto.
-    const canjeablePoints = loyaltyEnabled && client.id !== 0 
-        ? Math.min(client.puntosAcumulados, maxPointsByTotal, maxPointsByConfig) 
+    const canjeablePoints = loyaltyEnabled && client && client.id !== 0
+        ? Math.min(client.puntosAcumulados, maxPointsByTotal, maxPointsByConfig)
         : 0;
-    
+
     // Saldo real total para mostrar en la UI
-    const totalClientBalance = client.puntosAcumulados;
+    const totalClientBalance = client?.puntosAcumulados ?? 0;
 
     // Validación para el checkout
     const isClientValidForDoc =
         documentType === 'Boleta' ||
         documentType === 'Nota de Venta' ||
-        (documentType === 'Factura' && client.id !== 0 && client.type_doc === 'RUC' && client.numero_doc.length === 11);
+        (documentType === 'Factura' && client && client.id !== 0 && client.type_doc === 'RUC' && client.numero_doc?.length === 11);
 
     const canCheckout = cart.length > 0 && amountReceived >= total && isClientValidForDoc;
 
@@ -931,7 +914,7 @@ export default function SalesPOS({ farmacia, user }) {
         }
 
         // Si es Boleta y no hay cliente, cambiar automáticamente a Nota de Venta
-        if (documentType === 'Boleta' && client.id === 0) {
+        if (documentType === 'Boleta' && (!client || client.id === 0)) {
             setDocumentType('Nota de Venta');
         }
 
@@ -952,6 +935,10 @@ export default function SalesPOS({ farmacia, user }) {
         fetchPOSConfig();
     }, [farmacia?.id]);
 
+    if (!farmacia?.id) {
+        return <Card><p>Seleccione una farmacia para empezar a vender.</p></Card>;
+    }
+
     const handleCheckout = async () => {
         if (!canCheckout) return;
 
@@ -962,6 +949,10 @@ export default function SalesPOS({ farmacia, user }) {
             return;
         }
 
+        // Guard contra doble envío (doble clic en el botón de cobro)
+        if (isSubmittingSaleRef.current) return;
+        isSubmittingSaleRef.current = true;
+
         try {
             // Unificar todos los items y enviarlos a /sales
             // El backend manejará la distinción entre PRODUCTS y SERVICES
@@ -971,7 +962,7 @@ export default function SalesPOS({ farmacia, user }) {
                     quantity: Number(item.quantity),
                     type: item.tipo === 'servicio' ? 'SERVICE' : (item.tipo === 'promo' ? 'PROMO' : 'PRODUCT')
                 })),
-                clienteId: client.id === 0 ? null : client.id,
+                clienteId: !client || client.id === 0 ? null : client.id,
                 metodoPago: paymentMethod,
                 montoRecibido: amountReceived,
                 canjePuntos: appliedPoints,
@@ -1018,6 +1009,8 @@ export default function SalesPOS({ farmacia, user }) {
         } catch (error) {
             console.error("Checkout failed", error);
             alert(`Error en la venta: ${error.response?.data?.details || error.message}`);
+        } finally {
+            isSubmittingSaleRef.current = false;
         }
     };
     // --- Renderizado de Sugerencias incrustadas en el carrito ---

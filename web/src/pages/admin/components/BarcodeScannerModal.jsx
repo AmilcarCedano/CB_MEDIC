@@ -18,7 +18,7 @@ export default function BarcodeScannerModal({ isOpen, onClose, onResult }) {
 
   const stopCamera = () => {
     if (readerRef.current) {
-      try { readerRef.current.reset(); } catch (_) {}
+      try { readerRef.current.reset(); } catch { /* el lector puede estar ya liberado, se ignora */ }
       readerRef.current = null;
     }
     // Detener tracks de video explícitamente
@@ -74,7 +74,7 @@ export default function BarcodeScannerModal({ isOpen, onClose, onResult }) {
         await readerRef.current.decodeFromVideoDevice(
           backCamera.deviceId,
           videoRef.current,
-          (result, err) => {
+          (result) => {
             if (result && !cancelled) {
               const code = result.getText();
               setLastResult(code);

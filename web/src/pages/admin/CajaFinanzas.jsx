@@ -34,7 +34,7 @@ const CajaFinanzas = ({ farmacia, user }) => {
     const [motivoEgreso, setMotivoEgreso] = useState('');
     const [observacionesCierre, setObservacionesCierre] = useState({ observaciones: '', password: '' });
     const [historialTurnos, setHistorialTurnos] = useState([]);
-    const [egresos, setEgresos] = useState([]);
+    const [, setEgresos] = useState([]);
     const [showDetallesModal, setShowDetallesModal] = useState(false);
     const [turnoSeleccionado, setTurnoSeleccionado] = useState(null);
     const [ventas, setVentas] = useState([]);

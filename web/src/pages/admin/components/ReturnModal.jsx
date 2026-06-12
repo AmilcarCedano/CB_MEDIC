@@ -127,7 +127,7 @@ export default function ReturnModal({ isOpen, onClose, comprobante, onSuccess })
                 };
             });
 
-            const { data } = await api.post(`/sales/return/${comprobante.id}`, {
+            await api.post(`/sales/return/${comprobante.id}`, {
                 items: returnItems,
                 motivo: motivo.trim()
             });

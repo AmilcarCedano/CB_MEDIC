@@ -43,7 +43,7 @@ export default function Usuarios({ farmacia }) {
     try {
       const { data } = await api.get("/users", { params: { farmaciaId: farmacia.id } });
       setUsers(data);
-    } catch (err) {
+    } catch {
       setError("No se pudieron cargar los vendedores.");
     } finally {
       setLoading(false);

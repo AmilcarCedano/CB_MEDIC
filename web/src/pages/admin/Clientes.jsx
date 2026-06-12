@@ -40,8 +40,6 @@ const Modal = ({ isOpen, title, onClose, children }) => {
 const docTypeOptions = [{ value: 'DNI', label: 'DNI' }, { value: 'RUC', label: 'RUC' }];
 
 export default function Clientes({ farmacia, user }) {
-    if (!farmacia?.id) return <Card><p>Seleccione una farmacia para ver sus clientes.</p></Card>;
-
     const [clients, setClients] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [loadingClients, setLoadingClients] = useState(true);
@@ -77,7 +75,7 @@ export default function Clientes({ farmacia, user }) {
         }
     };
 
-    useEffect(() => { fetchClients(); }, [farmacia.id]);
+    useEffect(() => { if (!farmacia?.id) return; fetchClients(); }, [farmacia?.id]);
 
     const handleDocumentSearch = async () => {
         const { tipoDoc, numeroDoc } = clientModalData;
@@ -168,6 +166,8 @@ export default function Clientes({ farmacia, user }) {
         );
     }, [clients, searchTerm]);
 
+    if (!farmacia?.id) return <Card><p>Seleccione una farmacia para ver sus clientes.</p></Card>;
+
     const handleOpenHistory = async (client) => {
         setSelectedClientForHistory(client);
         setIsHistoryModalOpen(true);
@@ -196,7 +196,7 @@ export default function Clientes({ farmacia, user }) {
                 servicioId: type === 'SERVICE' ? (item.servicioId || item.id) : null,
                 cantidad: 1
             };
-            const { data } = await api.post('/clientes/habitual', payload, { headers: { 'x-farmacia-id': farmacia.id } });
+            await api.post('/clientes/habitual', payload, { headers: { 'x-farmacia-id': farmacia.id } });
             
             // Refresh habitual items
             const habitualRes = await api.get(`/clientes/${selectedClientForHistory.id}/habituales`, { headers: { 'x-farmacia-id': farmacia.id } });

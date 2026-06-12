@@ -299,6 +299,7 @@ export default function ProductosStock({ farmacia, onBack }) {
       await api.post("/envios", {
         farmaciaId: farmacia.id,
         titulo: shipmentTitle.trim() || `Envío ${new Date().toLocaleDateString()}`,
+        // eslint-disable-next-line no-unused-vars -- se descarta categoriaNombre a propósito (no debe ir en el payload)
         items: shipmentItems.map(({ categoriaNombre, ...item }) => ({
           ...item,
           fechaVencimiento: toNoonUTC(item.fechaVencimiento),
@@ -523,7 +524,7 @@ export default function ProductosStock({ farmacia, onBack }) {
           {shipmentItems.length === 0 ? (
             <p className="text-gray-500">Aún no has añadido productos a este envío.</p>
           ) : (
-            shipmentItems.map((item, index) => (
+            shipmentItems.map((item) => (
               <div key={item.id} className="flex items-center justify-between p-4 rounded-lg bg-gray-50">
                 <div>
                   <p className="font-semibold">{item.nombre}</p>

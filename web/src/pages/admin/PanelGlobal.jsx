@@ -7,7 +7,6 @@ export default function PanelGlobal({
   adminName,
   adminUsername,
   activeTab = "dashboard",
-  onTabChange = () => { },
   farmacias,
   loadingFarmacias,
   errorFarmacias,
@@ -69,7 +68,7 @@ export default function PanelGlobal({
       const formData = new FormData();
       formData.append('logo', logoFile);
 
-      const { data } = await api.post('/config/logo', formData, {
+      await api.post('/config/logo', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

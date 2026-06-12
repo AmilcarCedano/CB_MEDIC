@@ -328,7 +328,7 @@ const Etiquetas = ({ farmacia, user }) => {
 <html><head>
   <meta charset="utf-8">
   <title>Etiquetas - ${printPreview.nombre}</title>
-  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { margin: 4mm; background: #fff; }
@@ -345,7 +345,7 @@ const Etiquetas = ({ farmacia, user }) => {
       ${barcodeScript}
       setTimeout(function() { window.print(); }, 600);
     };
-  <\/script>
+  </script>
 </body></html>`);
     printWindow.document.close();
   };

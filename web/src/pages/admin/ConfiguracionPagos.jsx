@@ -6,7 +6,6 @@ import { Settings, Save, Image as ImageIcon, Trash2, Power, PowerOff, ZoomIn, Zo
 export default function ConfiguracionPagos({ farmacia }) {
     const [configs, setConfigs] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
     const [error, setError] = useState(null);
 
     const [newMetodo, setNewMetodo] = useState('');
@@ -164,7 +163,7 @@ function ConfiguracionGeneralPOS({ farmacia }) {
         try {
             await api.put('/config/pos', config, { headers: { 'x-farmacia-id': farmacia.id } });
             alert("Configuración general guardada");
-        } catch (err) {
+        } catch {
             alert("Error al guardar");
         } finally {
             setSaving(false);

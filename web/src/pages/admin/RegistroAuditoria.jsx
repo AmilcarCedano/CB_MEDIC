@@ -78,7 +78,7 @@ const RegistroAuditoria = ({ farmacia, user }) => {
       const { data } = await api.get(`/auditoria?${params}`);
       setLogs(data.data);
       setPagination(data.pagination);
-    } catch (err) {
+    } catch {
       setError('No se pudo cargar el registro de auditoría.');
     } finally {
       setLoading(false);
@@ -89,7 +89,7 @@ const RegistroAuditoria = ({ farmacia, user }) => {
     try {
       const { data } = await api.get(`/auditoria/stats?farmaciaId=${farmacia.id}`);
       setStats(data);
-    } catch (e) { /* silently fail */ }
+    } catch { /* silently fail */ }
   }, [farmacia]);
 
   useEffect(() => {

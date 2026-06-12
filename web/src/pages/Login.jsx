@@ -7,6 +7,7 @@ export default function Login({ onLogin }) {
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [logoLoadFailed, setLogoLoadFailed] = useState(false);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -38,16 +39,16 @@ export default function Login({ onLogin }) {
         <div className="relative z-10 flex flex-col items-center justify-center text-white">
           {/* Logo/Icon */}
           <div className="inline-flex items-center justify-center w-32 h-32 bg-white/20 backdrop-blur-sm rounded-3xl shadow-2xl mb-8 overflow-hidden relative">
-            <img
-              src={`${import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : "http://localhost:4000"}/uploads/system-logo.png`}
-              alt="Logo"
-              className="w-full h-full object-contain p-2"
-              onError={(e) => {
-                e.target.style.display = 'none';
-                // Fallback to stethoscope icon if image fails
-                e.target.parentElement.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-stethoscope text-white" aria-hidden="true"><path d="M11 2v2"></path><path d="M5 2v2"></path><path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1"></path><path d="M8 15a6 6 0 0 0 12 0v-3"></path><circle cx="20" cy="10" r="2"></circle></svg>`;
-              }}
-            />
+            {logoLoadFailed ? (
+              <Stethoscope size={64} className="text-white" aria-hidden="true" />
+            ) : (
+              <img
+                src={`${import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : "http://localhost:4000"}/uploads/system-logo.png`}
+                alt="Logo"
+                className="w-full h-full object-contain p-2"
+                onError={() => setLogoLoadFailed(true)}
+              />
+            )}
           </div>
           <h1 className="text-6xl font-extrabold tracking-tight">
             CB Medic

@@ -309,7 +309,7 @@ export default function AdminShell({ session, onLogout }) {
         : data;
       setFarmacias(filtered);
       setSelectedFarmacia(filtered[0] || null);
-    } catch (err) {
+    } catch {
       setErrorFarmacias("No se pudieron cargar las farmacias.");
     } finally {
       setLoadingFarmacias(false);
@@ -326,7 +326,7 @@ export default function AdminShell({ session, onLogout }) {
     try {
       const { data } = await api.get("/master/summary");
       setMasterSummary(data);
-    } catch (err) {
+    } catch {
       setMasterError("No se pudo obtener el resumen de la base maestra.");
     } finally {
       setMasterLoading(false);

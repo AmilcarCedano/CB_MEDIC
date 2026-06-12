@@ -109,7 +109,7 @@ const Inventario = ({ farmacia, user }) => {
     try {
       const { data } = await api.get(`/products?farmaciaId=${farmacia.id}`);
       setProducts(data);
-    } catch (err) {
+    } catch {
       setError('No se pudieron cargar los productos.');
     } finally {
       setLoading(false);
@@ -193,7 +193,6 @@ const Inventario = ({ farmacia, user }) => {
   // --- AGREGACION DE PRODUCTOS POR CODIGO DE BARRAS ---
   const aggregatedProducts = useMemo(() => {
     if (!products) return [];
-    const map = new Map();
     const lowerSearch = searchTerm.toLowerCase();
 
     // 1. Agrupar todo primero sin filtrar para tener la lista completa de lotes por código

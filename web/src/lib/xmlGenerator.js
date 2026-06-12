@@ -1,6 +1,6 @@
 const escapeXML = (str) => {
     if (typeof str !== 'string') return '';
-    return str.replace(/[<>&'\"]/g, (c) => {
+    return str.replace(/[<>&'"]/g, (c) => {
         switch (c) {
             case '<': return '&lt;';
             case '>': return '&gt;';
