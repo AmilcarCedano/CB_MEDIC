@@ -1,3 +1,6 @@
+# NOTA: la fuente de verdad de producción es /opt/cbmedic/app/docker-compose.yml
+# en el VPS (con MySQL + labels de Traefik; ver deploy_tools/docker-compose.vps.yml
+# como copia de referencia). Este archivo es la copia local de referencia.
 version: '3.8'
 
 services:
@@ -14,6 +17,13 @@ services:
       - ADMIN_MASTER_PASSWORD=${ADMIN_MASTER_PASSWORD}
       - RENIEC_API_URL=${RENIEC_API_URL}
       - RENIEC_API_TOKEN=${RENIEC_API_TOKEN}
+    # wget de busybox viene incluido en node:20-alpine (no hay curl en la imagen)
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     restart: always
 
   frontend:
