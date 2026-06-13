@@ -233,14 +233,19 @@ const Sidebar = ({ currentScreen, setCurrentScreen, context, onExit, isOpen, tog
 
   return (
     <>
-      <div className={`fixed inset-0 bg-black/50 z-20 lg:hidden ${isOpen ? "block" : "hidden"}`} onClick={toggleSidebar} />
+      <div className={`fixed inset-0 bg-black/50 z-20 md:hidden ${isOpen ? "block" : "hidden"}`} onClick={toggleSidebar} />
       <aside
-        className={`fixed inset-y-0 left-0 z-30 bg-gray-900 text-white flex flex-col transform transition-all duration-300 ease-in-out ${isOpen ? "translate-x-0" : "-translate-x-full"
-          } lg:relative lg:translate-x-0 ${isCollapsed ? "w-20" : "w-64"}`}
+        className={`fixed inset-y-0 left-0 z-30 bg-gray-900 text-white flex flex-col transform transition-all duration-300 ease-in-out ${isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
+          } md:relative md:translate-x-0 md:shadow-none w-64 ${isCollapsed ? "md:w-20" : "md:w-64"} max-w-[85vw]`}
       >
-        <div className={`p-4 flex items-center justify-between border-b border-gray-800 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+        <div className={`p-4 flex items-center justify-between border-b border-gray-800 ${isCollapsed ? 'md:justify-center' : 'justify-between'}`}>
           {!isCollapsed && <h1 className="text-2xl font-extrabold text-indigo-400">CBMedic</h1>}
-          <button onClick={toggleSidebar} className="text-gray-400 hover:text-white lg:hidden">
+          {isCollapsed && <h1 className="hidden max-md:block text-2xl font-extrabold text-indigo-400">CBMedic</h1>}
+          <button
+            onClick={toggleSidebar}
+            aria-label="Cerrar menú"
+            className="p-2 -m-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors md:hidden"
+          >
             <X size={24} />
           </button>
         </div>
