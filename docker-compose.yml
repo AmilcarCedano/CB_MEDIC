@@ -1,38 +1,94 @@
-# NOTA: la fuente de verdad de producción es /opt/cbmedic/app/docker-compose.yml
-# en el VPS (con MySQL + labels de Traefik; ver deploy_tools/docker-compose.vps.yml
-# como copia de referencia). Este archivo es la copia local de referencia.
-version: '3.8'
-
+# ============================================================================
+# docker-compose.yml — PRODUCCIÓN
+# Lo usa el IaC: Ansible clona el repo en /opt/cbmedic/app y ejecuta este compose.
+# Para desarrollo local NO uses este archivo: corre `npm run dev` en server/ y web/.
+#
+# Origen de las variables:
+#  - ${MYSQL_ROOT_PASSWORD} y ${MYSQL_DATABASE} → archivo .env que el rol de
+#    ansible genera en /opt/cbmedic/app/.env (solo para el contenedor MySQL).
+#  - El backend lee toda su config (DATABASE_URL, JWT_SECRET, RENIEC, etc.) desde
+#    server/.env vía `env_file` (lo coloca el rol de ansible; gitignored en el repo).
+#
+# Red: 'dokploy-network' es externa y la crea el rol de Docker/Traefik del IaC.
+# El backend DEBE llamarse 'cbmedic-backend' (lo usa web/nginx.conf como upstream).
+# ============================================================================
 services:
-  backend:
+  cbmedic-mysql:
+    image: mysql:8.0
+    container_name: cbmedic-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+    volumes:
+      - cbmedic_mysql_data:/var/lib/mysql
+    expose:
+      - "3306"
+    networks:
+      - cbmedic_net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  cbmedic-backend:
     build:
       context: ./server
+    container_name: cbmedic-backend
+    restart: always
+    # El backend toma DATABASE_URL/JWT_SECRET/RENIEC/ADMIN_MASTER_PASSWORD de aquí.
+    env_file:
+      - ./server/.env
     expose:
       - "4000"
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - JWT_SECRET=${JWT_SECRET}
-      - PORT=4000
-      - NODE_ENV=production
-      - ADMIN_MASTER_PASSWORD=${ADMIN_MASTER_PASSWORD}
-      - RENIEC_API_URL=${RENIEC_API_URL}
-      - RENIEC_API_TOKEN=${RENIEC_API_TOKEN}
-    # wget de busybox viene incluido en node:20-alpine (no hay curl en la imagen)
+    depends_on:
+      cbmedic-mysql:
+        condition: service_healthy
+    networks:
+      - cbmedic_net
+    # El entrypoint aplica el esquema y asegura el admin; damos margen de arranque.
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:4000/health"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 20s
-    restart: always
+      start_period: 40s
 
-  frontend:
+  cbmedic-web:
     build:
       context: ./web
       args:
-        - VITE_API_URL=
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
+        VITE_API_URL: ""
+    container_name: cbmedic-web
     restart: always
+    expose:
+      - "80"
+    depends_on:
+      - cbmedic-backend
+    networks:
+      - cbmedic_net
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dokploy-network"
+      # --- HTTP → redirige a HTTPS ---
+      - "traefik.http.routers.cbmedic-http.rule=Host(`cbmedic.duckdns.org`)"
+      - "traefik.http.routers.cbmedic-http.entrypoints=web"
+      - "traefik.http.routers.cbmedic-http.middlewares=cbmedic-redirect"
+      - "traefik.http.middlewares.cbmedic-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.cbmedic-redirect.redirectscheme.permanent=true"
+      # --- HTTPS con Let's Encrypt ---
+      - "traefik.http.routers.cbmedic-https.rule=Host(`cbmedic.duckdns.org`)"
+      - "traefik.http.routers.cbmedic-https.entrypoints=websecure"
+      - "traefik.http.routers.cbmedic-https.tls.certresolver=letsencrypt"
+      - "traefik.http.services.cbmedic-web.loadbalancer.server.port=80"
+
+volumes:
+  cbmedic_mysql_data:
+
+networks:
+  cbmedic_net:
+    driver: bridge
+  dokploy-network:
+    external: true
