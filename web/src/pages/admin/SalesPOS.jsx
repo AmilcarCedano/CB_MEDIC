@@ -976,7 +976,8 @@ export default function SalesPOS({ farmacia, user }) {
                 setTimeout(() => {
                     const fullComprobante = data?.comprobante;
                     if (fullComprobante) {
-                        generateTicketPDF(fullComprobante, farmacia);
+                        // Async (carga logo); nunca debe romper el flujo de venta
+                        Promise.resolve(generateTicketPDF(fullComprobante, farmacia, posConfig)).catch(console.error);
                     }
                 }, 1000);
             }

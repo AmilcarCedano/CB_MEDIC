@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Input } from './components/ui.jsx';
 import { api } from '../../lib/api.js';
-import { Settings, Save, Image as ImageIcon, Trash2, Power, PowerOff, ZoomIn, ZoomOut } from 'lucide-react';
+import { Settings, Save, Image as ImageIcon, Trash2, Power, PowerOff, ZoomIn, ZoomOut, FileText } from 'lucide-react';
 
 export default function ConfiguracionPagos({ farmacia }) {
     const [configs, setConfigs] = useState([]);
@@ -141,6 +141,9 @@ function ConfiguracionGeneralPOS({ farmacia }) {
     const [config, setConfig] = useState(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [uploadingLogo, setUploadingLogo] = useState(false);
+
+    const serverUrl = import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : 'http://localhost:4000';
 
     useEffect(() => {
         fetchConfig();
@@ -168,6 +171,41 @@ function ConfiguracionGeneralPOS({ farmacia }) {
         } finally {
             setSaving(false);
         }
+    };
+
+    const handleLogoUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (file.size > 2 * 1024 * 1024) {
+            alert("La imagen no debe superar los 2MB");
+            e.target.value = null;
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('logo', file);
+
+        setUploadingLogo(true);
+        try {
+            const { data } = await api.post('/config/pos/logo', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                    'x-farmacia-id': farmacia.id
+                }
+            });
+            setConfig(prev => ({ ...prev, comprobanteLogoUrl: data.logoUrl }));
+        } catch (err) {
+            console.error("Error subiendo logo:", err);
+            alert(err.response?.data?.error || "Error al subir el logo");
+        } finally {
+            setUploadingLogo(false);
+            e.target.value = null;
+        }
+    };
+
+    const handleRemoveLogo = () => {
+        setConfig(prev => ({ ...prev, comprobanteLogoUrl: null }));
     };
 
     if (loading) return <div>Cargando ajustes generales...</div>;
@@ -221,6 +259,46 @@ function ConfiguracionGeneralPOS({ farmacia }) {
                         >
                             {config?.autoDownloadTicket ? <Power size={24} /> : <PowerOff size={24} />}
                         </button>
+                    </div>
+                </div>
+            </div>
+
+            <div className="pt-6 border-t border-gray-200">
+                <h4 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                    <FileText size={20} className="text-indigo-600" />
+                    Configuración de comprobante
+                </h4>
+                <p className="text-xs text-gray-500 mt-1 mb-4">Personaliza el logo que aparecerá en los PDF de boleta, factura y ticket.</p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Logo de la farmacia (Comprobantes)</label>
+                        {config?.comprobanteLogoUrl ? (
+                            <div className="relative border rounded-lg p-3 bg-gray-50 flex flex-col items-center group">
+                                <img
+                                    src={`${serverUrl}${config.comprobanteLogoUrl}`}
+                                    alt="Logo de comprobante"
+                                    className="max-h-28 object-contain rounded"
+                                />
+                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg gap-2">
+                                    <label className="cursor-pointer bg-white text-gray-800 p-2 rounded-full hover:bg-gray-100" title="Reemplazar logo">
+                                        <ImageIcon size={18} />
+                                        <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleLogoUpload} disabled={uploadingLogo} />
+                                    </label>
+                                    <button onClick={handleRemoveLogo} className="bg-red-600 text-white p-2 rounded-full hover:bg-red-700" title="Quitar logo">
+                                        <Trash2 size={18} />
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <label className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-gray-500 cursor-pointer hover:bg-gray-50 hover:border-indigo-300 transition-colors ${uploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}>
+                                <ImageIcon size={32} className="mb-2 text-gray-400" />
+                                <span className="text-sm">{uploadingLogo ? 'Subiendo logo...' : 'Click para subir el logo'}</span>
+                                <span className="text-[10px] text-gray-400 mt-1 uppercase">PNG, JPG o WEBP · Máx. 2MB</span>
+                                <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleLogoUpload} disabled={uploadingLogo} />
+                            </label>
+                        )}
+                        <p className="text-xs text-gray-500 mt-2">Este logo se mostrará en la cabecera de la boleta/factura y en el ticket.</p>
                     </div>
                 </div>
             </div>

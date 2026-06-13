@@ -262,6 +262,7 @@ model configuracionpos {
   igvPercent            Decimal  @default(18.00) @db.Decimal(10, 2)
   autoDownloadTicket    Boolean  @default(true)
   margenVencimientoMeses Int     @default(3)
+  comprobanteLogoUrl    String?  @db.VarChar(255)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
   farmacia              farmacia @relation(fields: [farmaciaId], references: [id], onDelete: Cascade)

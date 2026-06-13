@@ -96,8 +96,16 @@ const dashboardRouter = require('./routes/dashboard');
 app.use('/dashboard', authenticate, dashboardRouter);
 
 // Servir archivos estáticos (uploads)
+// Son imágenes públicas (logos, QRs de pago). Se exponen con CORS abierto para
+// que el frontend pueda leerlas vía canvas (logo en PDFs con crossOrigin=anonymous)
+// desde cualquier origen donde corra la app (dev cross-port, IP de LAN, dominio).
 const path = require('path');
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
+    setHeaders: (res) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    }
+}));
 
 const PORT = 4000;
 const server = app.listen(PORT, '0.0.0.0', () => console.log(`API escuchando en http://localhost:${PORT}`));

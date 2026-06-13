@@ -86,6 +86,82 @@ router.get('/logo', (req, res) => {
 
 // --- POS Configuration ---
 
+// Multer dedicado para el logo del comprobante (por farmacia)
+const comprobanteLogoStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        const uploadDir = path.join(__dirname, '../../uploads');
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+        const ext = path.extname(file.originalname || '').toLowerCase();
+        // Nombre por farmacia + timestamp para evitar problemas de caché del navegador
+        cb(null, `comprobante-logo-${req.farmaciaId}-${Date.now()}${ext}`);
+    }
+});
+
+const uploadComprobanteLogo = multer({
+    storage: comprobanteLogoStorage,
+    limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname || '').toLowerCase();
+        if (ALLOWED_EXT.includes(ext) && ALLOWED_MIME.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Solo se permiten imágenes PNG, JPG o WEBP'));
+        }
+    }
+});
+
+// Upload logo de comprobante (boleta/factura) por farmacia
+router.post('/pos/logo', (req, res) => {
+    const farmaciaId = req.farmaciaId;  // Del JWT, no del header
+    if (!farmaciaId) return res.status(400).json({ error: 'Farmacia no identificada' });
+
+    uploadComprobanteLogo.single('logo')(req, res, async (err) => {
+        if (err) {
+            return res.status(400).json({ error: err.message || 'Error al subir el logo' });
+        }
+        if (!req.file) {
+            return res.status(400).json({ error: 'No se subió ningún archivo' });
+        }
+
+        const fileUrl = `/uploads/${req.file.filename}`;
+
+        try {
+            // Guardar URL en la config POS y limpiar el logo anterior del disco
+            const prev = await prisma.configuracionpos.findUnique({ where: { farmaciaId } });
+
+            const config = await prisma.configuracionpos.upsert({
+                where: { farmaciaId },
+                update: { comprobanteLogoUrl: fileUrl },
+                create: { farmaciaId, comprobanteLogoUrl: fileUrl }
+            });
+
+            // Borrar archivo anterior (solo si era un logo de comprobante de esta farmacia)
+            const oldUrl = prev?.comprobanteLogoUrl;
+            if (oldUrl && oldUrl !== fileUrl) {
+                const oldName = path.basename(oldUrl);
+                if (oldName.startsWith(`comprobante-logo-${farmaciaId}-`)) {
+                    const oldPath = path.join(__dirname, '../../uploads', oldName);
+                    fs.unlink(oldPath, () => { /* ignorar si no existe */ });
+                }
+            }
+
+            return res.json({
+                message: 'Logo de comprobante actualizado correctamente',
+                logoUrl: fileUrl,
+                config
+            });
+        } catch (e) {
+            console.error(e);
+            return res.status(500).json({ error: 'Error al guardar el logo del comprobante' });
+        }
+    });
+});
+
 // Get POS config
 router.get('/pos', async (req, res) => {
     const farmaciaId = req.farmaciaId;  // Del JWT, no del header
@@ -115,7 +191,13 @@ router.put('/pos', async (req, res) => {
     const farmaciaId = req.farmaciaId;  // Del JWT, no del header
     if (!farmaciaId) return res.status(400).json({ error: 'Farmacia no identificada' });
 
-    const { igvPercent, autoDownloadTicket, margenVencimientoMeses } = req.body;
+    const { igvPercent, autoDownloadTicket, margenVencimientoMeses, comprobanteLogoUrl } = req.body;
+
+    // Validación del logo de comprobante
+    if (comprobanteLogoUrl !== undefined && comprobanteLogoUrl !== null &&
+        (typeof comprobanteLogoUrl !== 'string' || !comprobanteLogoUrl.startsWith('/uploads/'))) {
+        return res.status(400).json({ error: 'URL de logo inválida' });
+    }
 
     try {
         const config = await prisma.configuracionpos.upsert({
@@ -123,13 +205,15 @@ router.put('/pos', async (req, res) => {
             update: {
                 igvPercent: igvPercent !== undefined ? parseFloat(igvPercent) : undefined,
                 autoDownloadTicket: autoDownloadTicket !== undefined ? !!autoDownloadTicket : undefined,
-                margenVencimientoMeses: margenVencimientoMeses !== undefined ? Number(margenVencimientoMeses) : undefined
+                margenVencimientoMeses: margenVencimientoMeses !== undefined ? Number(margenVencimientoMeses) : undefined,
+                comprobanteLogoUrl: comprobanteLogoUrl !== undefined ? comprobanteLogoUrl : undefined
             },
             create: {
                 farmaciaId,
                 igvPercent: igvPercent !== undefined ? parseFloat(igvPercent) : 18.00,
                 autoDownloadTicket: autoDownloadTicket !== undefined ? !!autoDownloadTicket : true,
-                margenVencimientoMeses: margenVencimientoMeses !== undefined ? Number(margenVencimientoMeses) : 3
+                margenVencimientoMeses: margenVencimientoMeses !== undefined ? Number(margenVencimientoMeses) : 3,
+                comprobanteLogoUrl: comprobanteLogoUrl !== undefined ? comprobanteLogoUrl : null
             }
         });
 

@@ -1,18 +1,75 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-export const generateComprobantePDF = (comprobante, farmacia) => {
-    const doc = new jsPDF();
+const getServerUrl = () => {
+    const base = import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : 'http://localhost:4000';
+    // Sin slash final: la URL del logo ('/uploads/...') ya empieza con '/'
+    return String(base).replace(/\/+$/, '');
+};
 
-    // --- Header ---
+/**
+ * Carga el logo configurado y lo devuelve como dataURL PNG (vía canvas).
+ * Nunca rechaza: si el logo no existe o falla la carga, resuelve null
+ * para que la generación del PDF continúe sin logo.
+ */
+const loadLogoImage = (logoUrl) => new Promise((resolve) => {
+    if (!logoUrl || typeof window === 'undefined') return resolve(null);
+    try {
+        const src = logoUrl.startsWith('http') ? logoUrl : `${getServerUrl()}${logoUrl}`;
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        const timer = setTimeout(() => resolve(null), 4000);
+        img.onload = () => {
+            clearTimeout(timer);
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.naturalWidth;
+                canvas.height = img.naturalHeight;
+                canvas.getContext('2d').drawImage(img, 0, 0);
+                resolve({
+                    dataUrl: canvas.toDataURL('image/png'),
+                    width: img.naturalWidth,
+                    height: img.naturalHeight
+                });
+            } catch {
+                resolve(null);
+            }
+        };
+        img.onerror = () => { clearTimeout(timer); resolve(null); };
+        img.src = src;
+    } catch {
+        resolve(null);
+    }
+});
+
+export const generateComprobantePDF = async (comprobante, farmacia, posConfig) => {
+    const logo = await loadLogoImage(posConfig?.comprobanteLogoUrl);
+
+    // El comprobante A4 siempre se genera en horizontal (landscape)
+    const doc = new jsPDF({ orientation: 'landscape' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // --- Header (con logo opcional arriba a la izquierda) ---
+    let headerX = 14;
+    if (logo && logo.width > 0 && logo.height > 0) {
+        try {
+            const logoH = 18;
+            const logoW = Math.min(45, (logo.width / logo.height) * logoH);
+            doc.addImage(logo.dataUrl, 'PNG', 14, 12, logoW, logoH);
+            headerX = 14 + logoW + 6;
+        } catch {
+            headerX = 14; // si jsPDF no puede dibujar el logo, continuar sin él
+        }
+    }
+
     doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
-    doc.text(farmacia?.nombre || 'Nombre de Farmacia', 14, 22);
+    doc.text(farmacia?.nombre || 'Nombre de Farmacia', headerX, 22);
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(farmacia?.direccion || 'Dirección de la farmacia', 14, 28);
-    doc.text(`RUC: ${farmacia?.ruc || 'RUC de la farmacia'}`, 14, 34);
+    doc.text(farmacia?.direccion || 'Dirección de la farmacia', headerX, 28);
+    doc.text(`RUC: ${farmacia?.ruc || 'RUC de la farmacia'}`, headerX, 34);
 
     // --- Invoice Box ---
     let tipoComprobante = '';
@@ -25,13 +82,15 @@ export const generateComprobantePDF = (comprobante, farmacia) => {
     }
 
     const numeroComprobante = `${comprobante.serie}-${String(comprobante.numero).padStart(6, '0')}`;
-    
-    doc.rect(105, 15, 90, 25); // Box around the invoice details
+
+    // Posiciones relativas al borde derecho (soporta vertical y horizontal)
+    const boxX = pageWidth - 105;
+    doc.rect(boxX, 15, 90, 25); // Box around the invoice details
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text(`R.U.C. ${farmacia?.ruc || 'RUC de la farmacia'}`, 110, 22);
-    doc.text(tipoComprobante, 110, 29);
-    doc.text(numeroComprobante, 110, 36);
+    doc.text(`R.U.C. ${farmacia?.ruc || 'RUC de la farmacia'}`, boxX + 5, 22);
+    doc.text(tipoComprobante, boxX + 5, 29);
+    doc.text(numeroComprobante, boxX + 5, 36);
 
     // --- Client Info ---
     doc.setFontSize(12);
@@ -61,9 +120,9 @@ export const generateComprobantePDF = (comprobante, farmacia) => {
     }
 
     doc.setFont('helvetica', 'bold');
-    doc.text('Fecha de Emisión:', 120, 50);
+    doc.text('Fecha de Emisión:', pageWidth - 90, 50);
     doc.setFont('helvetica', 'normal');
-    doc.text(new Date(comprobante.fecha_emision).toLocaleDateString(), 165, 50);
+    doc.text(new Date(comprobante.fecha_emision).toLocaleDateString(), pageWidth - 45, 50);
 
     // --- Items Table ---
     const tableColumn = ["Cant.", "Descripción", "P. Unit.", "Total"];
@@ -103,31 +162,33 @@ export const generateComprobantePDF = (comprobante, farmacia) => {
     doc.setFont('helvetica', 'bold');
 
     let currentTotalsY = finalY + 10;
+    const totalsLabelX = pageWidth - 70;
+    const totalsValueX = pageWidth - 20;
 
-    doc.text('Op. Gravada:', 140, currentTotalsY);
-    doc.text(`S/ ${parseFloat(comprobante.subtotal).toFixed(2)}`, 190, currentTotalsY, { align: 'right' });
+    doc.text('Op. Gravada:', totalsLabelX, currentTotalsY);
+    doc.text(`S/ ${parseFloat(comprobante.subtotal).toFixed(2)}`, totalsValueX, currentTotalsY, { align: 'right' });
     currentTotalsY += 6;
 
-    doc.text('IGV (18%):', 140, currentTotalsY);
-    doc.text(`S/ ${parseFloat(comprobante.igv).toFixed(2)}`, 190, currentTotalsY, { align: 'right' });
+    doc.text('IGV (18%):', totalsLabelX, currentTotalsY);
+    doc.text(`S/ ${parseFloat(comprobante.igv).toFixed(2)}`, totalsValueX, currentTotalsY, { align: 'right' });
     currentTotalsY += 6;
 
     if (totalPromoSavings > 0) {
-        doc.text('Descuento Promo:', 140, currentTotalsY);
-        doc.text(`- S/ ${totalPromoSavings.toFixed(2)}`, 190, currentTotalsY, { align: 'right' });
+        doc.text('Descuento Promo:', totalsLabelX, currentTotalsY);
+        doc.text(`- S/ ${totalPromoSavings.toFixed(2)}`, totalsValueX, currentTotalsY, { align: 'right' });
         currentTotalsY += 6;
     }
 
     if (comprobante.descuentoPuntos && parseFloat(comprobante.descuentoPuntos) > 0) {
         doc.setFont('helvetica', 'bold');
-        doc.text('Canje Puntos:', 140, currentTotalsY);
-        doc.text(`- S/ ${parseFloat(comprobante.descuentoPuntos).toFixed(2)}`, 190, currentTotalsY, { align: 'right' });
+        doc.text('Canje Puntos:', totalsLabelX, currentTotalsY);
+        doc.text(`- S/ ${parseFloat(comprobante.descuentoPuntos).toFixed(2)}`, totalsValueX, currentTotalsY, { align: 'right' });
         currentTotalsY += 8;
     }
-    
+
     doc.setFontSize(14);
-    doc.text('TOTAL:', 140, currentTotalsY);
-    doc.text(`S/ ${parseFloat(comprobante.total).toFixed(2)}`, 190, currentTotalsY, { align: 'right' });
+    doc.text('TOTAL:', totalsLabelX, currentTotalsY);
+    doc.text(`S/ ${parseFloat(comprobante.total).toFixed(2)}`, totalsValueX, currentTotalsY, { align: 'right' });
 
     // --- Footer ---
     doc.setFontSize(8);
@@ -139,7 +200,9 @@ export const generateComprobantePDF = (comprobante, farmacia) => {
     doc.save(`comprobante-${numeroComprobante}.pdf`);
 };
 
-export const generateTicketPDF = (comprobante, farmacia) => {
+export const generateTicketPDF = async (comprobante, farmacia, posConfig) => {
+    const logo = await loadLogoImage(posConfig?.comprobanteLogoUrl);
+
     // 80mm width is ~226.7 points. Height depends on items. Estimated 200mm to start.
     const doc = new jsPDF({
         orientation: 'p',
@@ -149,6 +212,16 @@ export const generateTicketPDF = (comprobante, farmacia) => {
 
     const width = 80;
     let y = 10;
+
+    // --- Logo (centrado, opcional) ---
+    if (logo && logo.width > 0 && logo.height > 0) {
+        try {
+            const logoH = 14;
+            const logoW = Math.min(40, (logo.width / logo.height) * logoH);
+            doc.addImage(logo.dataUrl, 'PNG', (width - logoW) / 2, y - 4, logoW, logoH);
+            y += logoH + 2;
+        } catch { /* continuar sin logo */ }
+    }
 
     // --- Header ---
     doc.setFontSize(14);

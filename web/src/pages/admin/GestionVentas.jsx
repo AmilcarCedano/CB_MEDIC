@@ -69,6 +69,7 @@ export default function GestionVentas({ farmacia, user }) {
     const [detailsModal, setDetailsModal] = useState({ isOpen: false, comprobante: null });
     const [openMenuId, setOpenMenuId] = useState(null);
     const [pagoConfigs, setPagoConfigs] = useState([]);
+    const [posConfig, setPosConfig] = useState(null);
 
     const fetchComprobantes = async () => {
         if (!farmacia?.id) return;
@@ -95,7 +96,17 @@ export default function GestionVentas({ farmacia, user }) {
                 console.error("Error fetching pago configs:", err);
             }
         };
+        const fetchPosConfig = async () => {
+            if (!farmacia?.id) return;
+            try {
+                const { data } = await api.get('/config/pos', { headers: { 'x-farmacia-id': farmacia.id } });
+                setPosConfig(data);
+            } catch (err) {
+                console.error("Error fetching POS config:", err);
+            }
+        };
         fetchPagoConfigs();
+        fetchPosConfig();
         fetchComprobantes();
     }, [farmacia]);
 
@@ -121,11 +132,11 @@ export default function GestionVentas({ farmacia, user }) {
     };
 
     const handleDownloadPDF = (comprobante) => {
-        generateComprobantePDF(comprobante, farmacia);
+        Promise.resolve(generateComprobantePDF(comprobante, farmacia, posConfig)).catch(console.error);
     };
 
     const handleDownloadTicket = (comprobante) => {
-        generateTicketPDF(comprobante, farmacia);
+        Promise.resolve(generateTicketPDF(comprobante, farmacia, posConfig)).catch(console.error);
     };
 
     const handleDownloadXML = (comprobante) => {
