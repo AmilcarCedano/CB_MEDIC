@@ -3,7 +3,11 @@
 **Producción:** VPS con Docker Compose + Traefik → https://cbmedic.duckdns.org
 **Fuente de verdad:** `/opt/cbmedic/app/docker-compose.yml` en el VPS (el `docker-compose.yml` local y `deploy_tools/docker-compose.vps.yml` son copias de referencia).
 
-> ⚠️ El proyecto usa `prisma db push` (no hay carpeta `prisma/migrations/`). La imagen de producción ya no incluye el CLI de prisma (se poda con `npm prune`), por eso se invoca con versión pineada: `npx prisma@5.22.0`.
+> ⚠️ El proyecto usa `prisma db push` (no hay carpeta `prisma/migrations/`).
+>
+> ✅ **Inicialización automática:** el contenedor backend usa un entrypoint (`server/docker-entrypoint.sh`) que, en cada arranque, espera a la base de datos, aplica el esquema con `prisma db push` y asegura el usuario admin (`prisma/init-prod.js`). En una base de datos nueva, el primer `docker compose up -d --build` deja el sistema listo con **usuario `admin` / contraseña `adminPass`** — sin pasos manuales. El paso 3 de abajo queda como opcional/diagnóstico.
+>
+> 🔐 El init **no sobrescribe** el admin si ya existe: tu cambio de contraseña se conserva entre despliegues.
 
 ---
 
@@ -35,15 +39,15 @@ cd /opt/cbmedic/app
 git pull
 ```
 
-## 3. Sincronizar el schema de la BD
+## 3. Sincronizar el schema de la BD (automático)
 
-Solo si hubo cambios en `server/prisma/schema.prisma`:
+**Normalmente no hace falta hacer nada:** el entrypoint del backend ejecuta `prisma db push` en cada arranque (paso 4). Si `db push` detectara un cambio **destructivo**, el contenedor falla en vez de borrar datos y queda visible en los logs — ahí sí hay que intervenir manualmente:
 
 ```bash
-docker compose run --rm backend npx prisma@5.22.0 db push --skip-generate
+docker compose run --rm backend npx prisma db push --skip-generate
 ```
 
-> `db push` aplica el schema directamente. Revisar el resumen que imprime antes de confirmar: si advierte pérdida de datos, **detenerse** y evaluar.
+> Revisar el resumen que imprime: si advierte pérdida de datos, **detenerse**, hacer backup y evaluar.
 
 ## 4. Reconstruir y levantar
 

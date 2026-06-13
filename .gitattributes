@@ -1,0 +1,3 @@
+# Los scripts de shell deben mantener fin de línea LF siempre (necesario para
+# que docker-entrypoint.sh se ejecute en contenedores Linux/Alpine).
+*.sh text eol=lf

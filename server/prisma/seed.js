@@ -20,12 +20,9 @@ async function main() {
   const adminPass = await bcrypt.hash(adminPlain, 10);
   await prisma.user.upsert({
     where: { username: 'admin' },
-    update: {
-      fullName: 'Administrador Global',
-      passwordHash: adminPass,
-      role: 'ADMIN',
-      isActive: true,
-    },
+    // No sobrescribir si ya existe: preserva la contraseña que el usuario
+    // haya cambiado (no resetear a 'adminPass' en cada ejecución).
+    update: {},
     create: {
       username: 'admin',
       fullName: 'Administrador Global',
