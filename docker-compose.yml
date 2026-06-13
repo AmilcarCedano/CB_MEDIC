@@ -42,6 +42,10 @@ services:
       - ./server/.env
     expose:
       - "4000"
+    # Persistir los archivos subidos (logos de comprobante, QR de pago, etc.)
+    # para que NO se pierdan al reconstruir la imagen en cada redeploy.
+    volumes:
+      - cbmedic_uploads:/app/uploads
     depends_on:
       cbmedic-mysql:
         condition: service_healthy
@@ -86,6 +90,7 @@ services:
 
 volumes:
   cbmedic_mysql_data:
+  cbmedic_uploads:
 
 networks:
   cbmedic_net:
