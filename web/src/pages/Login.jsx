@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "../lib/api.js";
+import LoadingScreen from "../components/LoadingScreen.jsx";
 import { Stethoscope, Lock, User, LogIn, AlertCircle, Building2 } from "lucide-react";
 
 export default function Login({ onLogin }) {
@@ -13,8 +14,14 @@ export default function Login({ onLogin }) {
     event.preventDefault();
     setError(null);
     setIsSubmitting(true);
+    // Tiempo mínimo de visualización del loader (solo en éxito) para que
+    // la transición se aprecie también cuando la respuesta es instantánea.
+    const MIN_LOADER_MS = 1400;
+    const startedAt = Date.now();
     try {
       const { data } = await api.post("/auth/login", { username, password });
+      const remaining = MIN_LOADER_MS - (Date.now() - startedAt);
+      if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
       onLogin({ ...data, source: "api" });
     } catch (err) {
       const message =
@@ -27,6 +34,7 @@ export default function Login({ onLogin }) {
 
   return (
     <div className="min-h-screen w-full flex bg-gradient-to-br from-slate-50 to-blue-50">
+      {isSubmitting && <LoadingScreen message="Iniciando sesión..." />}
       {/* Left Side - Image/Branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-600 via-indigo-600 to-cyan-700 relative overflow-hidden items-center justify-center">
         {/* Decorative elements */}

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Login from "./pages/Login.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import AdminShell from "./pages/admin/AdminShell.jsx";
+import LoadingScreen from "./components/LoadingScreen.jsx";
 import { setAuthToken } from "./lib/api.js";
 import "./App.css";
 
@@ -12,6 +13,15 @@ const SOURCE_KEY = "cb_source";
 export default function App() {
   const [session, setSession] = useState(null);
   const [bootstrapped, setBootstrapped] = useState(false);
+  // Tiempo mínimo del loader de arranque para que la animación se aprecie
+  // aunque la restauración de sesión sea instantánea (en producción la
+  // latencia real puede extenderlo de forma natural).
+  const [minSplashDone, setMinSplashDone] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setMinSplashDone(true), 1400);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (bootstrapped) return;
@@ -54,12 +64,12 @@ export default function App() {
 
   const hasAccessToAdmin = session?.user?.role === "ADMIN" || session?.user?.role === "VENDEDOR";
   
-  if (bootstrapped && session && hasAccessToAdmin) {
-    return <AdminShell session={session} onLogout={handleLogout} />;
+  if (!bootstrapped || !minSplashDone) {
+    return <LoadingScreen />;
   }
 
-  if (!bootstrapped) {
-    return <div className="min-h-screen flex items-center justify-center">Cargando...</div>;
+  if (session && hasAccessToAdmin) {
+    return <AdminShell session={session} onLogout={handleLogout} />;
   }
 
   if (!session) {
