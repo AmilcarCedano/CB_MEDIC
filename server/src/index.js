@@ -28,7 +28,7 @@ const promocionesRouter = require('./routes/promociones');
 const app = express();
 app.set('trust proxy', 1);
 
-const DEFAULT_ORIGINS = ['https://cbmedic.duckdns.org', 'http://localhost:5173', 'http://localhost:4173'];
+const DEFAULT_ORIGINS = ['https://cbmedic.duckdns.org', 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:4173'];
 const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
 const origins = allowedOrigins.length ? allowedOrigins : DEFAULT_ORIGINS;
 app.use(cors({
