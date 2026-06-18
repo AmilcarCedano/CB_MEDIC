@@ -49,25 +49,28 @@ router.post('/import', requireAdmin, async (req, res) => {
     }
 
     if (Array.isArray(productos) && productos.length > 0) {
-      await prisma.$transaction([
-        prisma.productomaestro.deleteMany({}),
-        prisma.productomaestro.createMany({
-          data: productos.map((item) => ({
-            productoDigemidId: item.productoDigemidId || null,
-            nombre: item.nombre || 'Sin nombre',
-            concentracion: item.concentracion || null,
-            formaFarmaceutica: item.formaFarmaceutica || null,
-            presentacion: item.presentacion || null,
-            registroSanitario: item.registroSanitario || null,
-            laboratorio: item.laboratorio || null,
-            fabricante: item.fabricante || null,
-            rubro: item.rubro || null,
-            principioActivo: item.principioActivo || null,
-            fraccion: item.fraccion || null,
-            situacion: item.situacion || null,
-          })),
-        }),
-      ]);
+      const mapped = productos.map((item) => ({
+        productoDigemidId: item.productoDigemidId || null,
+        nombre: item.nombre || 'Sin nombre',
+        concentracion: item.concentracion || null,
+        formaFarmaceutica: item.formaFarmaceutica || null,
+        presentacion: item.presentacion || null,
+        registroSanitario: item.registroSanitario || null,
+        laboratorio: item.laboratorio || null,
+        fabricante: item.fabricante || null,
+        rubro: item.rubro || null,
+        principioActivo: item.principioActivo || null,
+        fraccion: item.fraccion || null,
+        situacion: item.situacion || null,
+      }));
+
+      const BATCH = 500;
+      await prisma.$transaction(async (tx) => {
+        await tx.productomaestro.deleteMany({});
+        for (let i = 0; i < mapped.length; i += BATCH) {
+          await tx.productomaestro.createMany({ data: mapped.slice(i, i + BATCH) });
+        }
+      }, { timeout: 120000 });
     }
 
     const log = await prisma.masterimportlog.create({

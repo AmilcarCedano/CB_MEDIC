@@ -198,12 +198,12 @@ const DashboardFarmacia = ({ farmacia }) => {
               </button>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-gray-500">Desde:</span>
+          <div className="flex items-center gap-2 flex-nowrap">
+            <span className="text-xs font-medium text-gray-500 whitespace-nowrap">Desde:</span>
             <Input type="date" value={inputDesde} onChange={(e) => setInputDesde(e.target.value)} className="!py-1.5 !text-xs w-32" />
-            <span className="text-xs font-medium text-gray-500">Hasta:</span>
+            <span className="text-xs font-medium text-gray-500 whitespace-nowrap">Hasta:</span>
             <Input type="date" value={inputHasta} onChange={(e) => setInputHasta(e.target.value)} className="!py-1.5 !text-xs w-32" />
-            <Button variant="primary" size="sm" onClick={handleAplicarFiltro} className="flex items-center gap-1 shadow-sm">
+            <Button variant="primary" size="sm" onClick={handleAplicarFiltro} className="flex items-center gap-1 shadow-sm whitespace-nowrap">
               Aplicar
             </Button>
           </div>
