@@ -109,7 +109,7 @@ const DashboardFarmacia = ({ farmacia }) => {
     ];
 
     // Agregar las filas de ventas detalladas
-    ventasDiarias.forEach(v => {
+    (ventasDiarias || []).forEach(v => {
       const d = new Date(v.fecha);
       generalData.push([
         d.toLocaleDateString('es-PE'),
@@ -203,10 +203,10 @@ const DashboardFarmacia = ({ farmacia }) => {
             <Input type="date" value={inputDesde} onChange={(e) => setInputDesde(e.target.value)} className="!py-1.5 !text-xs w-32" />
             <span className="text-xs font-medium text-gray-500">Hasta:</span>
             <Input type="date" value={inputHasta} onChange={(e) => setInputHasta(e.target.value)} className="!py-1.5 !text-xs w-32" />
+            <Button variant="primary" size="sm" onClick={handleAplicarFiltro} className="flex items-center gap-1 shadow-sm">
+              Aplicar
+            </Button>
           </div>
-          <Button variant="primary" size="sm" onClick={handleAplicarFiltro} className="flex items-center gap-1 shadow-sm">
-            Aplicar
-          </Button>
           <div className="flex gap-1 sm:pl-2 sm:border-l sm:border-gray-200">
             <Button variant="outline" size="sm" onClick={exportToExcel} className="text-emerald-600 border border-emerald-200 hover:bg-emerald-50">
               <Download size={16} className="mr-1" /> Exportar Excel

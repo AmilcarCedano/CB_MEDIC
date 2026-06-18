@@ -432,15 +432,47 @@ export default function AdminShell({ session, onLogout }) {
   };
 
   const parseDelimitedText = (text) => {
-    const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    // Eliminar BOM UTF-8 si viene de Excel o Windows
+    const cleaned = text.replace(/^﻿/, '');
+    const lines = cleaned.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
     if (!lines.length) return [];
+
+    // Detectar delimitador por frecuencia (soporta |, ;, \t, ,)
     const detectDelimiter = (sample) => {
-      if (sample.includes("\t")) return "\t";
-      if (sample.includes(";")) return ";";
-      return ",";
+      const candidates = ['\t', '|', ';', ','];
+      let best = ',';
+      let bestCount = 0;
+      for (const sep of candidates) {
+        const count = sample.split(sep).length - 1;
+        if (count > bestCount) { bestCount = count; best = sep; }
+      }
+      return best;
     };
+
     const delimiter = detectDelimiter(lines[0]);
-    return lines.map((line) => line.split(delimiter).map((cell) => cell.trim()));
+
+    // Parser RFC-4180: maneja campos entre comillas con delimitadores internos
+    const parseLine = (line, sep) => {
+      const cells = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+          else { inQuotes = !inQuotes; }
+        } else if (ch === sep && !inQuotes) {
+          cells.push(current.trim());
+          current = '';
+        } else {
+          current += ch;
+        }
+      }
+      cells.push(current.trim());
+      return cells;
+    };
+
+    return lines.map((line) => parseLine(line, delimiter));
   };
 
   const parseMasterFile = async (file) => {
