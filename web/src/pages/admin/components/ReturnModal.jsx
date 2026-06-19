@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RotateCcw, X, AlertTriangle } from 'lucide-react';
+import { RotateCcw, X, AlertTriangle, Smartphone } from 'lucide-react';
 import { api } from '../../../lib/api';
 
 const Modal = ({ isOpen, onClose, title, children }) => {
@@ -44,6 +44,10 @@ export default function ReturnModal({ isOpen, onClose, comprobante, onSuccess })
     const [motivo, setMotivo] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [sendWhatsApp, setSendWhatsApp] = useState(false);
+
+    const clienteTelefono = comprobante?.cliente?.telefono || null;
+    const clienteNombre = comprobante?.nombre_razon_social || comprobante?.cliente?.nombreRazon || '';
 
     if (!comprobante) return null;
 
@@ -127,10 +131,29 @@ export default function ReturnModal({ isOpen, onClose, comprobante, onSuccess })
                 };
             });
 
-            await api.post(`/sales/return/${comprobante.id}`, {
+            const { data: returnData } = await api.post(`/sales/return/${comprobante.id}`, {
                 items: returnItems,
                 motivo: motivo.trim()
             });
+
+            // Envío opcional por WhatsApp (fire-and-forget)
+            if (sendWhatsApp && clienteTelefono) {
+                Promise.resolve((async () => {
+                    try {
+                        const primerNombre = clienteNombre.split(' ')[0] || 'cliente';
+                        const puntosDescontados = returnData?.devolucion?.puntosDescontados || 0;
+                        const puntosRestantes = returnData?.devolucion?.puntosRestantes ?? null;
+                        let texto = `🔄 ¡Hola, ${primerNombre}!\n\nHemos procesado tu devolución en *CB Medic*. 📄`;
+                        if (puntosDescontados > 0 && puntosRestantes !== null) {
+                            texto += `\n\n⚠️ Se descontó *${puntosDescontados} punto(s)* de tu cuenta por la devolución.\n⭐ Tu saldo actual es *${puntosRestantes} punto(s)*.`;
+                        }
+                        texto += '\n\nGracias por tu confianza. ¡Vuelve pronto! 💙';
+                        await api.post('/whatsapp/enviar', { telefono: clienteTelefono, texto });
+                    } catch (waErr) {
+                        console.warn('[WhatsApp] No se pudo enviar confirmación de devolución:', waErr.message);
+                    }
+                })());
+            }
 
             alert('Devolución procesada exitosamente');
             onSuccess();
@@ -241,6 +264,23 @@ export default function ReturnModal({ isOpen, onClose, comprobante, onSuccess })
                     <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-2">
                         <AlertTriangle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
                         <p className="text-red-800 text-sm">{error}</p>
+                    </div>
+                )}
+
+                {/* Toggle WhatsApp — solo si el cliente tiene teléfono */}
+                {clienteTelefono && (
+                    <div className="flex items-center gap-3 py-3 px-4 bg-green-50 border border-green-200 rounded-lg">
+                        <Smartphone size={18} className="text-green-600 flex-shrink-0" />
+                        <span className="text-sm font-medium text-green-800 flex-1">
+                            Enviar confirmación por WhatsApp<br/>
+                            <span className="text-xs font-normal text-green-600">{clienteTelefono}</span>
+                        </span>
+                        <input
+                            type="checkbox"
+                            checked={sendWhatsApp}
+                            onChange={(e) => setSendWhatsApp(e.target.checked)}
+                            className="w-5 h-5 accent-green-600 cursor-pointer"
+                        />
                     </div>
                 )}
 

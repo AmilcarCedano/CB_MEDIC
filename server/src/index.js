@@ -95,6 +95,9 @@ app.use('/promociones', authenticate, promocionesRouter);
 const dashboardRouter = require('./routes/dashboard');
 app.use('/dashboard', authenticate, dashboardRouter);
 
+const whatsappSendRouter = require('./routes/whatsapp-send');
+app.use('/whatsapp', authenticate, whatsappSendRouter);
+
 // Servir archivos estáticos (uploads)
 // Son imágenes públicas (logos, QRs de pago). Se exponen con CORS abierto para
 // que el frontend pueda leerlas vía canvas (logo en PDFs con crossOrigin=anonymous)

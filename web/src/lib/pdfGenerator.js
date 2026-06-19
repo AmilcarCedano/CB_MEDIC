@@ -459,3 +459,159 @@ export const generateTicketPDF = async (comprobante, farmacia, posConfig) => {
     // Si queremos visualizarlo usamos windows.open(doc.output('bloburl'))
     doc.save(fileName);
 };
+
+// Genera el mismo ticket pero retorna el base64 del PDF (sin descargarlo).
+// Usado para enviar por WhatsApp. No lanza — retorna null si falla.
+export const getTicketBase64 = async (comprobante, farmacia, posConfig) => {
+    try {
+        const logo = await loadLogoImage(posConfig?.comprobanteLogoUrl);
+
+        const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: [80, 250] });
+
+        const width = 80;
+        const left = 5;
+        const right = 75;
+        const qtyX = 50;
+        let y = 10;
+
+        doc.setTextColor(0, 0, 0);
+        doc.setDrawColor(0, 0, 0);
+
+        if (logo && logo.width > 0 && logo.height > 0) {
+            try {
+                const logoH = 14;
+                const logoW = Math.min(40, (logo.width / logo.height) * logoH);
+                doc.addImage(logo.dataUrl, 'PNG', (width - logoW) / 2, y - 4, logoW, logoH);
+                y += logoH + 2;
+            } catch { /* sin logo */ }
+        }
+
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text(farmacia?.nombre || 'CBMedic', width / 2, y, { align: 'center' });
+        y += 6;
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        const addressLines = doc.splitTextToSize(farmacia?.direccion || '', 70);
+        doc.text(addressLines, width / 2, y, { align: 'center' });
+        y += (addressLines.length * 4);
+        doc.text(`RUC: ${farmacia?.ruc || ''}`, width / 2, y, { align: 'center' });
+        y += 7;
+
+        let tipoComprobante = '';
+        if (!comprobante.numero_documento_cliente || comprobante.numero_documento_cliente === '00000000') {
+            tipoComprobante = 'NOTA DE VENTA';
+        } else if (comprobante.tipo_documento_cliente === '6' || comprobante.serie?.startsWith('F')) {
+            tipoComprobante = 'FACTURA ELECTRÓNICA';
+        } else {
+            tipoComprobante = 'BOLETA ELECTRÓNICA';
+        }
+        const numeroComprobante = `${comprobante.serie}-${String(comprobante.numero).padStart(6, '0')}`;
+
+        doc.setLineWidth(0.3);
+        doc.rect(left, y - 4, right - left, 11);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.text(tipoComprobante, width / 2, y, { align: 'center' });
+        doc.setFontSize(9);
+        doc.text(numeroComprobante, width / 2, y + 4.5, { align: 'center' });
+        y += 12;
+
+        const labelValue = (label, value, maxWidth) => {
+            doc.setFont('helvetica', 'bold');
+            doc.text(label, left, y);
+            doc.setFont('helvetica', 'normal');
+            const lines = doc.splitTextToSize(String(value), maxWidth);
+            doc.text(lines, left + 16, y);
+            y += Math.max(4, lines.length * 4);
+        };
+
+        doc.setFontSize(8);
+        labelValue('CLIENTE:', comprobante.nombre_razon_social || 'PÚBLICO GENERAL', 54);
+        labelValue('DOC:', comprobante.numero_documento_cliente || '00000000', 54);
+        labelValue('FECHA:', new Date(comprobante.fecha_emision).toLocaleString(), 54);
+        y += 2;
+
+        const dashedLine = () => {
+            doc.setLineDashPattern([0.6, 0.6], 0);
+            doc.line(left, y, right, y);
+            doc.setLineDashPattern([], 0);
+        };
+        dashedLine();
+        y += 4;
+
+        doc.setFont('helvetica', 'bold');
+        doc.text('DESCRIPCIÓN', left, y);
+        doc.text('CANT', qtyX, y, { align: 'center' });
+        doc.text('TOTAL', right, y, { align: 'right' });
+        y += 1.5;
+        doc.setLineWidth(0.2);
+        doc.line(left, y, right, y);
+        y += 4;
+        doc.setFont('helvetica', 'normal');
+
+        const money = (v) => `S/ ${parseFloat(v || 0).toFixed(2)}`;
+        let totalPromoSavings = 0;
+        (comprobante.items || []).forEach(item => {
+            if (item.codigo_producto === 'DESC-PROMO') {
+                totalPromoSavings += Math.abs(parseFloat(item.total));
+                return;
+            }
+            const descLines = doc.splitTextToSize(item.descripcion, 40);
+            doc.text(descLines, left, y);
+            doc.text(String(item.cantidad), qtyX, y, { align: 'center' });
+            doc.text(money(item.total), right, y, { align: 'right' });
+            y += descLines.length * 4;
+        });
+
+        y += 2;
+        dashedLine();
+        y += 6;
+
+        const drawTotalLine = (label, value, isBold = false) => {
+            doc.setFont('helvetica', isBold ? 'bold' : 'normal');
+            doc.text(label, qtyX - 5, y, { align: 'right' });
+            doc.text(money(value), right, y, { align: 'right' });
+            y += 5;
+        };
+
+        drawTotalLine('OP. GRAV:', comprobante.subtotal);
+        drawTotalLine('IGV:', comprobante.igv);
+        if (totalPromoSavings > 0) drawTotalLine('DESC. PROMO:', -totalPromoSavings);
+        if (comprobante.descuentoPuntos && parseFloat(comprobante.descuentoPuntos) > 0) {
+            drawTotalLine('PUNTOS:', -parseFloat(comprobante.descuentoPuntos));
+        }
+
+        y += 1;
+        doc.setLineWidth(0.3);
+        doc.line(left, y, right, y);
+        y += 5;
+        doc.setFontSize(12);
+        drawTotalLine('TOTAL:', comprobante.total, true);
+        doc.setFontSize(8);
+        y += 0.5;
+        doc.line(left, y, right, y);
+        y += 4;
+
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Forma de Pago: ${comprobante.forma_pago}`, left, y);
+        y += 6;
+
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text('¡Gracias por su compra!', width / 2, y, { align: 'center' });
+        y += 4;
+        doc.setFontSize(7.5);
+        doc.setFont('helvetica', 'normal');
+        doc.text('CBMedic - Sistema Farmacéutico', width / 2, y, { align: 'center' });
+
+        return {
+            data: doc.output('datauristring'),
+            filename: `ticket-${numeroComprobante}.pdf`,
+        };
+    } catch (err) {
+        console.error('[getTicketBase64] Error generando PDF:', err);
+        return null;
+    }
+};

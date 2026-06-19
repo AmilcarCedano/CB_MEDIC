@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Calculator, ShoppingCart, User, Search, X, DollarSign, CreditCard, Send, Smartphone, Banknote, ClipboardList, FileText, FileSearch, Zap, AlertTriangle, Lightbulb, Plus, Minus, Award, Tag, Clock, Stethoscope, Percent, Star, Edit, Calendar } from 'lucide-react';
 import { api } from '../../lib/api';
-import { generateTicketPDF } from '../../lib/pdfGenerator';
+import { generateTicketPDF, getTicketBase64 } from '../../lib/pdfGenerator';
 
 // --- PLACEHOLDER UI COMPONENTS ---
 const Card = ({ children, className = '', onClick = null }) => <div onClick={onClick} className={`bg-white rounded-xl shadow-lg p-4 md:p-6 ${className}`}>{children}</div>;
@@ -148,6 +148,7 @@ export default function SalesPOS({ farmacia, user }) {
     const [, setPointsError] = useState(null);
     const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
     const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+    const [sendWhatsApp, setSendWhatsApp] = useState(false);
     const [documentType, setDocumentType] = useState('Boleta');
     const [, setIsSaleCompletedModalOpen] = useState(false);
 
@@ -982,12 +983,38 @@ export default function SalesPOS({ farmacia, user }) {
                 }, 1000);
             }
 
+            // Envío opcional por WhatsApp (fire-and-forget, nunca bloquea la venta)
+            if (sendWhatsApp && client.telefono_whatsapp && data?.comprobante) {
+                const comp = data.comprobante;
+                const primerNombre = (client.nombre_razon || '').split(' ')[0];
+                const puntosGanados = Math.floor(parseFloat(comp.total || 0) / (loyaltyConfig?.solesPorPunto || 10));
+                const puntosNuevo = (client.puntosAcumulados || 0) + puntosGanados - (appliedPoints || 0);
+                let texto = `💊 ¡Hola, ${primerNombre}!\n\nGracias por tu compra en *CB Medic*. Aquí tienes tu comprobante de pago. 🧾`;
+                if (puntosGanados > 0) {
+                    texto += `\n\n⭐ Acumulaste *${puntosGanados} punto(s)* en esta compra.\n💰 Tu saldo total es *${Math.max(0, puntosNuevo)} punto(s)*.`;
+                }
+                texto += '\n\n¡Esperamos verte pronto! 😊';
+                Promise.resolve((async () => {
+                    try {
+                        const pdf = await getTicketBase64(comp, farmacia, posConfig);
+                        await api.post('/whatsapp/enviar', {
+                            telefono: client.telefono_whatsapp,
+                            texto,
+                            ...(pdf ? { pdf } : {}),
+                        });
+                    } catch (waErr) {
+                        console.warn('[WhatsApp] No se pudo enviar el comprobante:', waErr.message);
+                    }
+                })());
+            }
+
             // Limpiar carrito y estados
             setCart([]);
             setAmountReceived(0);
             setClient(MOCK_CLIENT);
             setDocumentType('Boleta');
             setAppliedPoints(0);
+            setSendWhatsApp(false);
             setIsCheckoutModalOpen(false);
             setIsSaleCompletedModalOpen(true);
 
@@ -1768,6 +1795,23 @@ export default function SalesPOS({ farmacia, user }) {
                 </div>
 
                 </div>
+
+                {/* Toggle WhatsApp — solo si el cliente tiene teléfono */}
+                {client.id !== 0 && client.telefono_whatsapp && (
+                    <div className="flex items-center gap-3 py-3 px-4 bg-green-50 border border-green-200 rounded-lg mt-3">
+                        <Smartphone size={18} className="text-green-600 flex-shrink-0" />
+                        <span className="text-sm font-medium text-green-800 flex-1">
+                            Enviar comprobante por WhatsApp<br/>
+                            <span className="text-xs font-normal text-green-600">{client.telefono_whatsapp}</span>
+                        </span>
+                        <input
+                            type="checkbox"
+                            checked={sendWhatsApp}
+                            onChange={(e) => setSendWhatsApp(e.target.checked)}
+                            className="w-5 h-5 accent-green-600 cursor-pointer"
+                        />
+                    </div>
+                )}
 
                 <div className="flex justify-end gap-3 pt-4 border-t mt-4">
                     <Button type="button" variant="secondary" onClick={() => setIsCheckoutModalOpen(false)}>
