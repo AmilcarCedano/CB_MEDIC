@@ -449,20 +449,37 @@ router.get('/monitor', async (req, res) => {
     });
 
     const turnosWithBreakdown = await Promise.all(turnosActivos.map(async (t) => {
-      const breakdown = await prisma.comprobante.groupBy({
-        by: ['forma_pago'],
-        where: {
-          farmaciaId: req.farmaciaId,
-          fecha_emision: { gte: t.fechaApertura },
-          estado_sunat: { not: 'ANULADO' },
-          usuarioId: t.usuarioId // Solo las ventas de este cajero en su turno
-        },
-        _sum: { total: true },
-        _count: true,
-      });
+      const [breakdown, comprobantesDelTurno] = await Promise.all([
+        prisma.comprobante.groupBy({
+          by: ['forma_pago'],
+          where: {
+            farmaciaId: req.farmaciaId,
+            fecha_emision: { gte: t.fechaApertura },
+            estado_sunat: { not: 'ANULADO' },
+            usuarioId: t.usuarioId
+          },
+          _sum: { total: true },
+          _count: true,
+        }),
+        prisma.comprobante.findMany({
+          where: {
+            farmaciaId: req.farmaciaId,
+            usuarioId: t.usuarioId,
+            fecha_emision: { gte: t.fechaApertura },
+            estado_sunat: { not: 'ANULADO' },
+          },
+          include: { devolucion: { select: { totalDevuelto: true } } },
+        }),
+      ]);
+
+      const montoVentasNeto = comprobantesDelTurno.reduce((sum, c) => {
+        const devuelto = c.devolucion.reduce((d, dev) => d + Number(dev.totalDevuelto || 0), 0);
+        return sum + Number(c.total) - devuelto;
+      }, 0);
 
       return {
         ...t,
+        montoVentas: montoVentasNeto,
         desglosePagos: breakdown.map(b => ({
           metodo: b.forma_pago || 'Efectivo',
           total: Number(b._sum.total || 0),

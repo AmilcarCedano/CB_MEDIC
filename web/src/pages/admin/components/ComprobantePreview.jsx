@@ -58,7 +58,7 @@ export default function ComprobantePreview({ comprobante, farmacia }) {
                             <tr key={item.id} className="border-b">
                                 <td className="p-2">{item.cantidad}</td>
                                 <td className="p-2">{item.descripcion}</td>
-                                <td className="p-2 text-right">S/ {parseFloat(item.precio_unitario).toFixed(2)}</td>
+                                <td className="p-2 text-right">S/ {(parseFloat(item.total) / (item.cantidad || 1)).toFixed(2)}</td>
                                 <td className="p-2 text-right">S/ {parseFloat(item.total).toFixed(2)}</td>
                             </tr>
                         ))}
