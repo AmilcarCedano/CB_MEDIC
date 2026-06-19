@@ -990,17 +990,18 @@ export default function SalesPOS({ farmacia, user }) {
             setAppliedPoints(0);
             setIsCheckoutModalOpen(false);
             setIsSaleCompletedModalOpen(true);
-            setIsSaleCompletedModalOpen(true);
 
             // Refresh products to update stock
             const { data: updatedProducts } = await api.get('/products', { params: { farmaciaId: farmacia.id } });
             setProducts(updatedProducts.map(p => ({ ...p, price: parseFloat(p.precioVenta) })));
 
-            // Actualizar monto de ventas en el turno de caja
-            if (turnoActivo) {
+            // Actualizar monto de ventas en el turno de caja usando el total
+            // del comprobante (fuente de verdad del backend) y no el total del
+            // carrito, que puede diferir si el precio fue editado manualmente.
+            if (turnoActivo && data?.comprobante?.total != null) {
                 try {
                     await api.put(`/caja/actualizar-ventas/${turnoActivo.id}`,
-                        { montoVenta: total }
+                        { montoVenta: Number(data.comprobante.total) }
                     );
                 } catch (err) {
                     console.error('Error updating turno ventas:', err);

@@ -458,6 +458,11 @@ router.put('/actualizar-ventas/:id', async (req, res) => {
     const { id } = req.params;
     const { montoVenta } = req.body;
 
+    const monto = parseFloat(montoVenta);
+    if (isNaN(monto) || monto < 0) {
+      return res.status(400).json({ error: 'montoVenta inválido' });
+    }
+
     const turno = await prisma.turnocaja.findUnique({
       where: { id: parseInt(id) }
     });
@@ -470,13 +475,9 @@ router.put('/actualizar-ventas/:id', async (req, res) => {
       return res.status(400).json({ error: 'El turno está cerrado' });
     }
 
-    const nuevoMontoVentas = parseFloat(turno.montoVentas) + parseFloat(montoVenta);
-
     const turnoActualizado = await prisma.turnocaja.update({
       where: { id: parseInt(id) },
-      data: {
-        montoVentas: nuevoMontoVentas
-      }
+      data: { montoVentas: { increment: monto } }
     });
 
     res.json(turnoActualizado);
