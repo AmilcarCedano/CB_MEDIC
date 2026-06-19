@@ -92,13 +92,21 @@ export default function ReturnModal({ isOpen, onClose, comprobante, onSuccess })
         });
     };
 
+    // Precio real por unidad = base + IGV proporcional por unidad
+    const precioUnitarioConIgv = (item) => {
+        const base = parseFloat(item.precio_unitario || 0);
+        const igvTotal = parseFloat(item.igv || 0);
+        const cant = item.cantidad || 1;
+        return base + igvTotal / cant;
+    };
+
     const calculateReturnTotal = () => {
         let total = 0;
         selectedItems.forEach(itemId => {
             const item = items.find(i => i.id === itemId);
             if (item) {
                 const cantidad = returnQuantities[itemId] || item.cantidad;
-                total += parseFloat(item.precio_unitario) * cantidad;
+                total += precioUnitarioConIgv(item) * cantidad;
             }
         });
         return total;
@@ -221,9 +229,9 @@ export default function ReturnModal({ isOpen, onClose, comprobante, onSuccess })
                                             className="w-20 p-1 border rounded text-sm"
                                         />
                                     </td>
-                                    <td className="p-3 text-sm">S/ {parseFloat(item.precio_unitario).toFixed(2)}</td>
+                                    <td className="p-3 text-sm">S/ {precioUnitarioConIgv(item).toFixed(2)}</td>
                                     <td className="p-3 text-sm font-semibold">
-                                        S/ {(parseFloat(item.precio_unitario) * (returnQuantities[item.id] || item.cantidad)).toFixed(2)}
+                                        S/ {(precioUnitarioConIgv(item) * (returnQuantities[item.id] || item.cantidad)).toFixed(2)}
                                     </td>
                                 </tr>
                             ))}
