@@ -32,7 +32,24 @@ router.get('/turno-activo', async (req, res) => {
       }
     });
 
-    res.json(turno);
+    if (!turno) return res.json(turno);
+
+    // Calcular montoVentas neto dinámicamente (ventas - devoluciones, excluye anuladas)
+    const comprobantesDelTurno = await prisma.comprobante.findMany({
+      where: {
+        farmaciaId: turno.farmaciaId,
+        usuarioId: turno.usuarioId,
+        fecha_emision: { gte: turno.fechaApertura },
+        estado_sunat: { not: 'ANULADO' },
+      },
+      include: { devolucion: { select: { totalDevuelto: true } } },
+    });
+    const montoVentasNeto = comprobantesDelTurno.reduce((sum, c) => {
+      const devuelto = c.devolucion.reduce((d, dev) => d + Number(dev.totalDevuelto || 0), 0);
+      return sum + Number(c.total) - devuelto;
+    }, 0);
+
+    res.json({ ...turno, montoVentas: montoVentasNeto });
   } catch (error) {
     console.error('Error fetching turno activo:', error);
     res.status(500).json({ error: 'Error al obtener turno activo' });
@@ -145,8 +162,20 @@ router.post('/cerrar-turno/:id', async (req, res) => {
       return res.status(400).json({ error: 'El turno ya está cerrado' });
     }
 
-    // Usar los valores ya calculados en el turno (se actualizan en tiempo real)
-    const montoVentas = Number(turno.montoVentas) || 0;
+    // Calcular ventas netas desde comprobantes reales (incluye retroactivos)
+    const comprobantesParaCierre = await prisma.comprobante.findMany({
+      where: {
+        farmaciaId: turno.farmaciaId,
+        usuarioId: turno.usuarioId,
+        fecha_emision: { gte: turno.fechaApertura },
+        estado_sunat: { not: 'ANULADO' },
+      },
+      include: { devolucion: { select: { totalDevuelto: true } } },
+    });
+    const montoVentas = comprobantesParaCierre.reduce((sum, c) => {
+      const devuelto = c.devolucion.reduce((d, dev) => d + Number(dev.totalDevuelto || 0), 0);
+      return sum + Number(c.total) - devuelto;
+    }, 0);
     const montoEgresos = Number(turno.montoEgresos) || 0;
     const montoFinal = Number(turno.montoInicial) + montoVentas - montoEgresos;
 
