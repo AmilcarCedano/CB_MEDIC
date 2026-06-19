@@ -147,7 +147,9 @@ export default function ReturnModal({ isOpen, onClose, comprobante, onSuccess })
             if (sendWhatsApp && clienteTelefono) {
                 Promise.resolve((async () => {
                     try {
-                        const primerNombre = clienteNombre.split(' ')[0] || 'cliente';
+                        const _partesR = (clienteNombre || '').trim().split(/\s+/);
+                        const _nombreR = _partesR.length >= 3 ? _partesR[2] : _partesR[_partesR.length - 1] || 'cliente';
+                        const primerNombre = _nombreR.charAt(0).toUpperCase() + _nombreR.slice(1).toLowerCase();
                         const puntosDescontados = returnData?.devolucion?.puntosDescontados || 0;
                         const puntosRestantes = returnData?.devolucion?.puntosRestantes ?? null;
                         let texto = `✅ ¡Devolución confirmada, ${primerNombre}!\n\nEn *CB Medic* nos aseguramos de que quedes 100% satisfecha 💚\n\n📄 Tu devolución fue procesada exitosamente`;

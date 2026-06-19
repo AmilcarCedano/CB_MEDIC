@@ -987,7 +987,9 @@ export default function SalesPOS({ farmacia, user }) {
             // Envío opcional por WhatsApp (fire-and-forget, nunca bloquea la venta)
             if (sendWhatsApp && client.telefono_whatsapp && data?.comprobante) {
                 const comp = data.comprobante;
-                const primerNombre = (client.nombre_razon || '').split(' ')[0];
+                const _partes = (client.nombre_razon || '').trim().split(/\s+/);
+                const _nombre = _partes.length >= 3 ? _partes[2] : _partes[_partes.length - 1] || 'cliente';
+                const primerNombre = _nombre.charAt(0).toUpperCase() + _nombre.slice(1).toLowerCase();
                 const puntosGanados = Math.floor(parseFloat(comp.total || 0) / (loyaltyConfig?.solesPorPunto || 10));
                 const puntosNuevo = (client.puntosAcumulados || 0) + puntosGanados - (appliedPoints || 0);
                 const serie = comp.serie || '';

@@ -738,19 +738,22 @@ router.post('/return/:id', async (req, res) => {
 
         if (loyaltyEnabled && totalDevuelto >= solesPorPunto) {
           const cliente = await tx.cliente.findUnique({ where: { id: comprobante.clienteId } });
-          if (cliente && cliente.puntosAcumulados > 0) {
-            puntosDescontados = 1;
-            puntosRestantes = Math.max(0, cliente.puntosAcumulados - 1);
+          if (cliente) {
             clienteTelefono = cliente.telefono || null;
             clienteNombre = cliente.nombreRazon || null;
-            await tx.cliente.update({
-              where: { id: cliente.id },
-              data: { puntosAcumulados: puntosRestantes },
-            });
-          } else if (cliente) {
-            clienteTelefono = cliente.telefono || null;
-            clienteNombre = cliente.nombreRazon || null;
-            puntosRestantes = cliente.puntosAcumulados;
+            // Descontar puntos proporcionales al monto devuelto
+            const puntosADescontar = Math.min(
+              Math.floor(totalDevuelto / solesPorPunto),
+              cliente.puntosAcumulados
+            );
+            puntosDescontados = puntosADescontar;
+            puntosRestantes = Math.max(0, cliente.puntosAcumulados - puntosADescontar);
+            if (puntosADescontar > 0) {
+              await tx.cliente.update({
+                where: { id: cliente.id },
+                data: { puntosAcumulados: puntosRestantes },
+              });
+            }
           }
         } else if (comprobante.clienteId) {
           const cliente = await tx.cliente.findUnique({ where: { id: comprobante.clienteId } });
