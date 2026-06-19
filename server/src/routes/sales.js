@@ -672,14 +672,19 @@ router.post('/return/:id', async (req, res) => {
           throw new Error(`Cantidad inválida para ${isService ? 'servicio' : 'producto'} ${targetId}`);
         }
 
-        const subtotal = parseFloat(comprobanteItem.precio_unitario) * returnItem.cantidad;
+        // Incluir IGV proporcional: precio_unitario es base, el cliente pagó base + igv
+        const baseUnitario = parseFloat(comprobanteItem.precio_unitario);
+        const igvTotal = parseFloat(comprobanteItem.igv || 0);
+        const igvUnitario = comprobanteItem.cantidad > 0 ? igvTotal / comprobanteItem.cantidad : 0;
+        const precioConIgv = baseUnitario + igvUnitario;
+        const subtotal = precioConIgv * returnItem.cantidad;
         totalDevuelto += subtotal;
 
         itemsToReturn.push({
           productoId: isService ? null : targetId,
           servicioId: isService ? targetId : null,
           cantidad: returnItem.cantidad,
-          precioUnitario: comprobanteItem.precio_unitario,
+          precioUnitario: precioConIgv,
           subtotal: subtotal,
           isService: isService
         });
