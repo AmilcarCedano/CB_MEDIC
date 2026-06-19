@@ -768,6 +768,21 @@ router.post('/return/:id', async (req, res) => {
       };
     });
 
+    // Decrementar montoVentas del turno activo (no falla la devolución si caja falla)
+    try {
+      const turnoActivo = await prisma.turnocaja.findFirst({
+        where: { farmaciaId: currentFarmaciaId, usuarioId: currentUsuarioId, estado: 'ABIERTO' },
+      });
+      if (turnoActivo) {
+        await prisma.turnocaja.update({
+          where: { id: turnoActivo.id },
+          data: { montoVentas: { decrement: result.totalDevuelto } },
+        });
+      }
+    } catch (cajaErr) {
+      console.warn('[Caja] No se pudo decrementar montoVentas:', cajaErr.message);
+    }
+
     res.status(201).json({
       success: true,
       message: 'Devolución procesada exitosamente',

@@ -282,12 +282,28 @@ const CajaFinanzas = ({ farmacia, user }) => {
                     <Card className="!p-4 sm:!p-6 rounded-2xl border border-gray-100 shadow-sm">
                         <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><TrendingUp size={18} className="text-indigo-600" />Ventas del Turno ({ventas.length})</h3>
                         <div className="space-y-2 max-h-60 overflow-y-auto">
-                            {ventas.map(v => (
-                                <div key={v.id} className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">
-                                    <div><p className="text-sm font-bold text-gray-900">{v.serie}-{v.numero}</p><p className="text-xs text-gray-500">{new Date(v.fecha_emision).toLocaleTimeString()}</p></div>
-                                    <p className="font-bold text-green-600 tabular-nums">S/ {parseFloat(v.total).toFixed(2)}</p>
-                                </div>
-                            ))}
+                            {ventas.map(v => {
+                                const devuelto = v.tieneDevolucion ? parseFloat(v.devolucion?.[0]?.totalDevuelto || 0) : 0;
+                                const neto = parseFloat(v.total) - devuelto;
+                                const esDevueltaTotal = v.tieneDevolucion && neto <= 0;
+                                const esDevueltaParcial = v.tieneDevolucion && neto > 0;
+                                return (
+                                    <div key={v.id} className={`flex justify-between items-center px-3 py-2 rounded-lg border transition-colors ${esDevueltaTotal ? 'bg-red-50 border-red-100' : esDevueltaParcial ? 'bg-yellow-50 border-yellow-100' : 'bg-gray-50 border-gray-100 hover:bg-gray-100'}`}>
+                                        <div>
+                                            <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                                                {v.serie}-{v.numero}
+                                                {esDevueltaTotal && <span className="text-[10px] font-bold bg-red-100 text-red-600 border border-red-200 px-1.5 py-0.5 rounded-full">Devuelta</span>}
+                                                {esDevueltaParcial && <span className="text-[10px] font-bold bg-yellow-100 text-yellow-700 border border-yellow-200 px-1.5 py-0.5 rounded-full">Dev. parcial</span>}
+                                            </p>
+                                            <p className="text-xs text-gray-500">{new Date(v.fecha_emision).toLocaleTimeString()}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            {v.tieneDevolucion && <p className="text-[10px] text-gray-400 line-through tabular-nums">S/ {parseFloat(v.total).toFixed(2)}</p>}
+                                            <p className={`font-bold tabular-nums ${esDevueltaTotal ? 'text-red-500' : esDevueltaParcial ? 'text-yellow-600' : 'text-green-600'}`}>S/ {neto.toFixed(2)}</p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </Card>
                 )}
