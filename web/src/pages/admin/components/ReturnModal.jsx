@@ -44,9 +44,8 @@ export default function ReturnModal({ isOpen, onClose, comprobante, onSuccess })
     const [motivo, setMotivo] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    const [sendWhatsApp, setSendWhatsApp] = useState(false);
-
     const clienteTelefono = comprobante?.cliente?.telefono || null;
+    const [sendWhatsApp, setSendWhatsApp] = useState(!!clienteTelefono);
     const clienteNombre = comprobante?.nombre_razon_social || comprobante?.cliente?.nombreRazon || '';
 
     if (!comprobante) return null;

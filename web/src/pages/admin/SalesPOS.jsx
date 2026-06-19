@@ -891,6 +891,7 @@ export default function SalesPOS({ farmacia, user }) {
             }
             const normalizedClient = { ...savedClient, type_doc: savedClient.tipoDoc, numero_doc: savedClient.numeroDoc, nombre_razon: savedClient.nombreRazon, telefono_whatsapp: savedClient.telefono || posClientData.telefono_whatsapp || '' };
             setClient(normalizedClient);
+            setSendWhatsApp(!!(savedClient.telefono || posClientData.telefono_whatsapp));
             if (normalizedClient.type_doc === 'RUC') {
                 setDocumentType('Factura');
             }
