@@ -990,11 +990,14 @@ export default function SalesPOS({ farmacia, user }) {
                 const primerNombre = (client.nombre_razon || '').split(' ')[0];
                 const puntosGanados = Math.floor(parseFloat(comp.total || 0) / (loyaltyConfig?.solesPorPunto || 10));
                 const puntosNuevo = (client.puntosAcumulados || 0) + puntosGanados - (appliedPoints || 0);
-                let texto = `💊 ¡Hola, ${primerNombre}!\n\nGracias por tu compra en *CB Medic*. Aquí tienes tu comprobante de pago. 🧾`;
+                const serie = comp.serie || '';
+                const numero = String(comp.numero || '').padStart(6, '0');
+                const total = parseFloat(comp.total || 0).toFixed(2);
+                let texto = `💊 ¡Hola, ${primerNombre}!\n\nGracias por elegirnos hoy en *CB Medic* 🏥\nTu salud es nuestra prioridad.\n\n🧾 *Comprobante ${serie}-${numero}*\n💵 Total pagado: *S/ ${total}*`;
                 if (puntosGanados > 0) {
-                    texto += `\n\n⭐ Acumulaste *${puntosGanados} punto(s)* en esta compra.\n💰 Tu saldo total es *${Math.max(0, puntosNuevo)} punto(s)*.`;
+                    texto += `\n\n✨ ¡Sumaste *${puntosGanados} punto(s)* en esta compra!\n🏆 Ahora tienes *${Math.max(0, puntosNuevo)} punto(s)* acumulados.\n_(Recuerda: con tus puntos obtienes descuentos especiales)_`;
                 }
-                texto += '\n\n¡Esperamos verte pronto! 😊';
+                texto += `\n\nAdjuntamos tu ticket digital 📎\n¡Que te mejores pronto! 💙\n— Equipo CB Medic`;
                 Promise.resolve((async () => {
                     try {
                         const pdf = await getTicketBase64(comp, farmacia, posConfig);

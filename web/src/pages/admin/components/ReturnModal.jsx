@@ -150,11 +150,13 @@ export default function ReturnModal({ isOpen, onClose, comprobante, onSuccess })
                         const primerNombre = clienteNombre.split(' ')[0] || 'cliente';
                         const puntosDescontados = returnData?.devolucion?.puntosDescontados || 0;
                         const puntosRestantes = returnData?.devolucion?.puntosRestantes ?? null;
-                        let texto = `🔄 ¡Hola, ${primerNombre}!\n\nHemos procesado tu devolución en *CB Medic*. 📄`;
+                        let texto = `✅ ¡Devolución confirmada, ${primerNombre}!\n\nEn *CB Medic* nos aseguramos de que quedes 100% satisfecha 💚\n\n📄 Tu devolución fue procesada exitosamente`;
                         if (puntosDescontados > 0 && puntosRestantes !== null) {
-                            texto += `\n\n⚠️ Se descontó *${puntosDescontados} punto(s)* de tu cuenta por la devolución.\n⭐ Tu saldo actual es *${puntosRestantes} punto(s)*.`;
+                            texto += `\n🔻 Puntos ajustados: *-${puntosDescontados} punto(s)*\n🏅 Tu saldo: *${puntosRestantes} punto(s)* — ¡sigues acumulando!`;
+                        } else if (puntosRestantes !== null) {
+                            texto += `\n🏅 Tus puntos: *${puntosRestantes} punto(s)* — ¡siguen intactos!`;
                         }
-                        texto += '\n\nGracias por tu confianza. ¡Vuelve pronto! 💙';
+                        texto += `\n\nAquí tienes tu comprobante de devolución adjunto 📎\nGracias por tu confianza, ${primerNombre}.\n¡Vuelve cuando quieras! 😊`;
                         await api.post('/whatsapp/enviar', { telefono: clienteTelefono, texto });
                     } catch (waErr) {
                         console.warn('[WhatsApp] No se pudo enviar confirmación de devolución:', waErr.message);
