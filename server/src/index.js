@@ -98,6 +98,10 @@ app.use('/dashboard', authenticate, dashboardRouter);
 const whatsappSendRouter = require('./routes/whatsapp-send');
 app.use('/whatsapp', authenticate, whatsappSendRouter);
 
+// Descarga de tickets temporales — público (sin auth), token de 64 hex chars
+const { router: ticketDownloadRouter } = require('./routes/ticket-download');
+app.use('/ticket', ticketDownloadRouter);
+
 // Servir archivos estáticos (uploads)
 // Son imágenes públicas (logos, QRs de pago). Se exponen con CORS abierto para
 // que el frontend pueda leerlas vía canvas (logo en PDFs con crossOrigin=anonymous)

@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
+const { saveTicket } = require('./ticket-download');
 
 const WAHA_URL = process.env.WAHA_URL || 'http://localhost:3000';
 const WAHA_KEY = process.env.WAHA_API_KEY || '';
+const PUBLIC_URL = process.env.PUBLIC_URL || 'http://213.199.58.162';
 
 function formatChatId(telefono) {
   const digits = String(telefono).replace(/\D/g, '');
@@ -26,9 +28,8 @@ async function wahaPost(path, body) {
   return res.json();
 }
 
-// POST /api/whatsapp/enviar
+// POST /whatsapp/enviar
 // Body: { telefono, texto, pdf?: { data: 'base64...', filename?: string } }
-// Siempre responde 200 — los errores de WAHA son aislados y no afectan al caller.
 router.post('/enviar', async (req, res) => {
   const { telefono, texto, pdf } = req.body;
 
@@ -36,29 +37,21 @@ router.post('/enviar', async (req, res) => {
     return res.status(400).json({ error: 'telefono y texto son requeridos' });
   }
 
-  // Responder inmediatamente — el envío ocurre en background
   const chatId = formatChatId(telefono);
   res.json({ ok: true, chatId });
 
   try {
-    await wahaPost('/api/sendText', {
-      session: 'default',
-      chatId,
-      text: texto,
-    });
+    await wahaPost('/api/sendText', { session: 'default', chatId, text: texto });
 
     if (pdf?.data) {
-      const rawBase64 = pdf.data.replace(/^data:[^;]+;base64,/, '');
-      await wahaPost('/api/sendFile', {
-        session: 'default',
-        chatId,
-        file: {
-          mimetype: 'application/pdf',
-          filename: pdf.filename || 'comprobante.pdf',
-          data: rawBase64,
-        },
-        caption: '',
-      });
+      try {
+        const token = saveTicket(pdf.data, pdf.filename || 'comprobante.pdf');
+        const enlace = `${PUBLIC_URL}/ticket/${token}`;
+        const mensajeEnlace = `📥 Descarga tu comprobante aquí (disponible 24 horas):\n${enlace}`;
+        await wahaPost('/api/sendText', { session: 'default', chatId, text: mensajeEnlace });
+      } catch (linkErr) {
+        console.warn('[WhatsApp] No se pudo generar enlace de ticket:', linkErr.message);
+      }
     }
   } catch (err) {
     console.error('[WhatsApp] Error enviando mensaje a', chatId, ':', err.message);
