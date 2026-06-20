@@ -995,7 +995,7 @@ export default function SalesPOS({ farmacia, user }) {
                 const serie = comp.serie || '';
                 const numero = String(comp.numero || '').padStart(6, '0');
                 const total = parseFloat(comp.total || 0).toFixed(2);
-                let texto = `💊 ¡Hola, ${primerNombre}!\n\nGracias por elegirnos hoy en *CB Medic* 🏥\nTu salud es nuestra prioridad.\n\n🧾 *Comprobante ${serie}-${numero}*\n💵 Total pagado: *S/ ${total}*`;
+                let texto = `💊 ¡Hola, ${primerNombre}!\n\nGracias por elegirnos hoy en *CB Medic* 🏥\nTu salud es nuestra prioridad.\n\n💵 Total pagado: *S/ ${total}*`;
                 if (puntosGanados > 0) {
                     texto += `\n\n✨ ¡Sumaste *${puntosGanados} punto(s)* en esta compra!\n🏆 Ahora tienes *${Math.max(0, puntosNuevo)} punto(s)* acumulados.\n_(Recuerda: con tus puntos obtienes descuentos especiales)_`;
                 }
