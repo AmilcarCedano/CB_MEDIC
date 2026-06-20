@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const TICKETS_DIR = path.join('/tmp', 'cbmedic-tickets');
+const TICKETS_DIR = path.join('/app/uploads', 'tickets');
 const TICKET_TTL_MS = 24 * 60 * 60 * 1000;
 
 function ensureDir() {
