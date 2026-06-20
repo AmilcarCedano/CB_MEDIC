@@ -31,6 +31,7 @@ async function wahaPost(path, body) {
 // POST /whatsapp/enviar
 // Body: { telefono, texto, comprobanteId?: number }
 router.post('/enviar', async (req, res) => {
+  console.log('[WhatsApp] body recibido:', JSON.stringify(req.body));
   const { telefono, texto, comprobanteId } = req.body;
 
   if (!telefono || !texto) {
