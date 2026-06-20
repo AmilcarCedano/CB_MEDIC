@@ -185,6 +185,7 @@ router.post('/cerrar-turno/:id', async (req, res) => {
         estado: 'CERRADO',
         fechaCierre: new Date(),
         montoFinal,
+        montoVentas,
         observaciones: observaciones || null
       }
     });
@@ -363,26 +364,36 @@ router.get('/historial', async (req, res) => {
         farmaciaId: req.farmaciaId,
         estado: 'CERRADO',
         usuarioId: req.userRole === 'VENDEDOR' ? req.userId : undefined,
-        fechaCierre: req.userRole === 'VENDEDOR' ? {
-          gte: new Date(Date.now() - 24 * 60 * 60 * 1000)
-        } : undefined
       },
       include: {
         usuario: {
-          select: {
-            id: true,
-            username: true,
-            fullName: true
-          }
+          select: { id: true, username: true, fullName: true }
         },
         egresos: true
       },
-      orderBy: {
-        fechaCierre: 'desc'
-      }
+      orderBy: { fechaCierre: 'desc' }
     });
 
-    res.json(turnos);
+    // Recalcular montoVentas dinámicamente para turnos que no lo tengan guardado
+    const turnosEnriquecidos = await Promise.all(turnos.map(async (t) => {
+      if (Number(t.montoVentas) > 0) return t; // ya tiene valor guardado
+      const comprobantes = await prisma.comprobante.findMany({
+        where: {
+          farmaciaId: t.farmaciaId,
+          usuarioId: t.usuarioId,
+          fecha_emision: { gte: t.fechaApertura, ...(t.fechaCierre ? { lte: t.fechaCierre } : {}) },
+          estado_sunat: { not: 'ANULADO' },
+        },
+        include: { devolucion: { select: { totalDevuelto: true } } },
+      });
+      const montoVentasNeto = comprobantes.reduce((sum, c) => {
+        const devuelto = c.devolucion.reduce((d, dev) => d + Number(dev.totalDevuelto || 0), 0);
+        return sum + Number(c.total) - devuelto;
+      }, 0);
+      return { ...t, montoVentas: montoVentasNeto };
+    }));
+
+    res.json(turnosEnriquecidos);
   } catch (error) {
     console.error('Error fetching historial:', error);
     res.status(500).json({ error: 'Error al obtener historial' });

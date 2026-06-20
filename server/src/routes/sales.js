@@ -20,8 +20,7 @@ const calculateTotals = (cartItems, discountFromPoints = 0) => {
 };
 
 // GET /api/sales - Obtiene todos los comprobantes de una farmacia
-// Los vendedores solo ven comprobantes de las últimas 20 horas
-// Los admins ven todos los comprobantes
+// Los admins ven todos. Los vendedores ven sus ventas (24h salvo que se pase ?desde=FECHA)
 router.get('/', async (req, res) => {
   const currentFarmaciaId = req.farmaciaId;
   const currentUserRole = req.userRole;
@@ -33,12 +32,19 @@ router.get('/', async (req, res) => {
       farmaciaId: currentFarmaciaId,
     };
 
-    // Si es vendedor, aplicar filtro de 24 horas y solo sus ventas
     if (currentUserRole === 'VENDEDOR') {
       whereClause.usuarioId = currentUsuarioId;
-      whereClause.fecha_emision = {
-        gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // 24 horas atrás
-      };
+      // ?desde=ISO_DATE permite obtener ventas desde la apertura del turno sin importar antigüedad
+      if (req.query.desde) {
+        const desde = new Date(req.query.desde);
+        if (!isNaN(desde.getTime())) {
+          whereClause.fecha_emision = { gte: desde };
+        }
+      } else {
+        whereClause.fecha_emision = {
+          gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
+        };
+      }
     }
 
     const comprobantes = await prisma.comprobante.findMany({

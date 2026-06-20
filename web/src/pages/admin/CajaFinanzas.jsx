@@ -100,12 +100,12 @@ const CajaFinanzas = ({ farmacia, user }) => {
     const fetchVentas = async () => {
         if (!turnoActivo) return;
         try {
-            const { data } = await api.get('/sales');
-            const ventasTurno = data.filter(venta => {
-                const fechaVenta = new Date(venta.fecha_emision || venta.fecha);
-                const fechaApertura = new Date(turnoActivo.fechaApertura);
-                return fechaVenta >= fechaApertura && (!turnoActivo.fechaCierre || fechaVenta <= new Date(turnoActivo.fechaCierre));
-            });
+            const desde = encodeURIComponent(turnoActivo.fechaApertura);
+            const { data } = await api.get(`/sales?desde=${desde}`);
+            // El server ya filtra desde fechaApertura; solo excluir las posteriores al cierre
+            const ventasTurno = turnoActivo.fechaCierre
+                ? data.filter(v => new Date(v.fecha_emision) <= new Date(turnoActivo.fechaCierre))
+                : data;
             setVentas(ventasTurno);
         } catch (error) {
             console.error('Error fetching ventas:', error);
@@ -167,16 +167,21 @@ const CajaFinanzas = ({ farmacia, user }) => {
 
     const calcularTotalEnCaja = () => {
         if (!turnoActivo) return 0;
-        return parseFloat(turnoActivo.montoInicial) +
-            parseFloat(turnoActivo.montoVentas) -
-            parseFloat(turnoActivo.montoEgresos);
+        return parseFloat(turnoActivo.montoInicial || 0) +
+            parseFloat(turnoActivo.montoVentas || 0) -
+            parseFloat(turnoActivo.montoEgresos || 0);
     };
 
     const ModalDetalles = () => {
         if (!turnoSeleccionado) return null;
-        const total = parseFloat(turnoSeleccionado.montoInicial) +
-            parseFloat(turnoSeleccionado.montoVentas) -
-            parseFloat(turnoSeleccionado.montoEgresos);
+        const ini = parseFloat(turnoSeleccionado.montoInicial || 0);
+        const egr = parseFloat(turnoSeleccionado.montoEgresos || 0);
+        // Si montoVentas no fue guardado (turnos anteriores al fix), lo deriva del final
+        const rawVentas = parseFloat(turnoSeleccionado.montoVentas || 0);
+        const ventas = rawVentas > 0
+            ? rawVentas
+            : parseFloat(turnoSeleccionado.montoFinal || 0) - ini + egr;
+        const total = ini + ventas - egr;
 
         return (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -204,8 +209,8 @@ const CajaFinanzas = ({ farmacia, user }) => {
                         <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><DollarSign size={16} className="text-indigo-600" />Resumen Financiero</h4>
                         <div className="space-y-2 text-sm">
                             <div className="flex justify-between"><span className="text-gray-600">Fondo Inicial:</span><span className="font-semibold tabular-nums">S/ {parseFloat(turnoSeleccionado.montoInicial).toFixed(2)}</span></div>
-                            <div className="flex justify-between text-green-600"><span>+ Ventas:</span><span className="font-semibold tabular-nums">S/ {parseFloat(turnoSeleccionado.montoVentas).toFixed(2)}</span></div>
-                            <div className="flex justify-between text-red-600"><span>- Egresos:</span><span className="font-semibold tabular-nums">S/ {parseFloat(turnoSeleccionado.montoEgresos).toFixed(2)}</span></div>
+                            <div className="flex justify-between text-green-600"><span>+ Ventas:</span><span className="font-semibold tabular-nums">S/ {ventas.toFixed(2)}</span></div>
+                            <div className="flex justify-between text-red-600"><span>- Egresos:</span><span className="font-semibold tabular-nums">S/ {egr.toFixed(2)}</span></div>
                             <div className="border-t border-blue-200/70 pt-2 flex justify-between text-lg font-bold text-gray-900"><span>Total Final:</span><span className="tabular-nums">S/ {parseFloat(turnoSeleccionado.montoFinal || total).toFixed(2)}</span></div>
                         </div>
                     </div>
@@ -278,11 +283,13 @@ const CajaFinanzas = ({ farmacia, user }) => {
                     <Button variant="outline" onClick={() => setShowModalEgreso(true)} className="w-full"><TrendingDown size={20} className="mr-2" />Egreso</Button>
                     <Button variant="danger" onClick={() => setShowModalCierre(true)} className="w-full"><Lock size={20} className="mr-2" />Cerrar Caja</Button>
                 </div>
-                {ventas.length > 0 && (
-                    <Card className="!p-4 sm:!p-6 rounded-2xl border border-gray-100 shadow-sm">
-                        <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><TrendingUp size={18} className="text-indigo-600" />Ventas del Turno ({ventas.length})</h3>
-                        <div className="space-y-2 max-h-60 overflow-y-auto">
-                            {ventas.map(v => {
+                <Card className="!p-4 sm:!p-6 rounded-2xl border border-gray-100 shadow-sm">
+                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><TrendingUp size={18} className="text-indigo-600" />Ventas del Turno ({ventas.length})</h3>
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {ventas.length === 0 ? (
+                            <p className="text-center text-gray-400 py-6 text-sm">Sin ventas registradas aún en este turno.</p>
+                        ) : (
+                            ventas.map(v => {
                                 const devuelto = v.tieneDevolucion ? parseFloat(v.devolucion?.[0]?.totalDevuelto || 0) : 0;
                                 const neto = parseFloat(v.total) - devuelto;
                                 const esDevueltaTotal = v.tieneDevolucion && neto <= 0;
@@ -303,10 +310,10 @@ const CajaFinanzas = ({ farmacia, user }) => {
                                         </div>
                                     </div>
                                 );
-                            })}
-                        </div>
-                    </Card>
-                )}
+                            })
+                        )}
+                    </div>
+                </Card>
             </div>
         );
     };
@@ -329,7 +336,7 @@ const CajaFinanzas = ({ farmacia, user }) => {
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-lg font-black text-indigo-600 tabular-nums">S/ {(parseFloat(t.montoInicial) + parseFloat(t.montoVentas) - parseFloat(t.montoEgresos)).toFixed(2)}</p>
+                                            <p className="text-lg font-black text-indigo-600 tabular-nums">S/ {(parseFloat(t.montoInicial || 0) + parseFloat(t.montoVentas || 0) - parseFloat(t.montoEgresos || 0)).toFixed(2)}</p>
                                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">Total en Caja</p>
                                         </div>
                                     </div>
