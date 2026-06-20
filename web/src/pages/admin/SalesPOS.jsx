@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Calculator, ShoppingCart, User, Search, X, DollarSign, CreditCard, Send, Smartphone, Banknote, ClipboardList, FileText, FileSearch, Zap, AlertTriangle, Lightbulb, Plus, Minus, Award, Tag, Clock, Stethoscope, Percent, Star, Edit, Calendar } from 'lucide-react';
 import { api } from '../../lib/api';
-import { generateTicketPDF, getTicketBase64 } from '../../lib/pdfGenerator';
+import { generateTicketPDF } from '../../lib/pdfGenerator';
 
 // --- PLACEHOLDER UI COMPONENTS ---
 const Card = ({ children, className = '', onClick = null }) => <div onClick={onClick} className={`bg-white rounded-xl shadow-lg p-4 md:p-6 ${className}`}>{children}</div>;
@@ -1002,11 +1002,10 @@ export default function SalesPOS({ farmacia, user }) {
                 texto += `\n\nAdjuntamos tu ticket digital 📎\n¡Que te mejores pronto! 💙\n— Equipo CB Medic`;
                 Promise.resolve((async () => {
                     try {
-                        const pdf = await getTicketBase64(comp, farmacia, posConfig);
                         await api.post('/whatsapp/enviar', {
                             telefono: client.telefono_whatsapp,
                             texto,
-                            ...(pdf ? { pdf } : {}),
+                            comprobanteId: comp.id,
                         });
                     } catch (waErr) {
                         console.warn('[WhatsApp] No se pudo enviar el comprobante:', waErr.message);

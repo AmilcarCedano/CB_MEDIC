@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { saveTicket } = require('./ticket-download');
+const { createTicketToken } = require('./ticket-download');
 
 const WAHA_URL = process.env.WAHA_URL || 'http://localhost:3000';
 const WAHA_KEY = process.env.WAHA_API_KEY || '';
@@ -29,9 +29,9 @@ async function wahaPost(path, body) {
 }
 
 // POST /whatsapp/enviar
-// Body: { telefono, texto, pdf?: { data: 'base64...', filename?: string } }
+// Body: { telefono, texto, comprobanteId?: number }
 router.post('/enviar', async (req, res) => {
-  const { telefono, texto, pdf } = req.body;
+  const { telefono, texto, comprobanteId } = req.body;
 
   if (!telefono || !texto) {
     return res.status(400).json({ error: 'telefono y texto son requeridos' });
@@ -43,9 +43,9 @@ router.post('/enviar', async (req, res) => {
   try {
     await wahaPost('/api/sendText', { session: 'default', chatId, text: texto });
 
-    if (pdf?.data) {
+    if (comprobanteId) {
       try {
-        const token = saveTicket(pdf.data, pdf.filename || 'comprobante.pdf');
+        const token = createTicketToken(Number(comprobanteId));
         const enlace = `${PUBLIC_URL}/ticket/${token}`;
         const mensajeEnlace = `📥 Descarga tu comprobante aquí (disponible 24 horas):\n${enlace}`;
         await wahaPost('/api/sendText', { session: 'default', chatId, text: mensajeEnlace });
