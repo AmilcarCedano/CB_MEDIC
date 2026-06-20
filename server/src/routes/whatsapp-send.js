@@ -31,7 +31,6 @@ async function wahaPost(path, body) {
 // POST /whatsapp/enviar
 // Body: { telefono, texto, comprobanteId?: number }
 router.post('/enviar', async (req, res) => {
-  console.log('[WhatsApp] body recibido:', JSON.stringify(req.body));
   const { telefono, texto, comprobanteId } = req.body;
 
   if (!telefono || !texto) {
@@ -50,8 +49,9 @@ router.post('/enviar', async (req, res) => {
         const enlace = `${PUBLIC_URL}/ticket/${token}`;
         const mensajeEnlace = `📥 Descarga tu comprobante aquí (disponible 24 horas):\n${enlace}`;
         await wahaPost('/api/sendText', { session: 'default', chatId, text: mensajeEnlace });
+        console.log('[WhatsApp] Link ticket enviado a', chatId, '→', enlace);
       } catch (linkErr) {
-        console.warn('[WhatsApp] No se pudo generar enlace de ticket:', linkErr.message);
+        console.warn('[WhatsApp] No se pudo enviar link de ticket a', chatId, ':', linkErr.message);
       }
     }
   } catch (err) {

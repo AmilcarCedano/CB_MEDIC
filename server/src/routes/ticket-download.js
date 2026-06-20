@@ -172,6 +172,10 @@ router.get('/:token', async (req, res) => {
     return res.status(500).send('Error interno.');
   }
 
+  if (!meta.comprobanteId) {
+    return res.status(410).send('Este enlace ha expirado o no es válido.');
+  }
+
   if (Date.now() > meta.expiresAt) {
     fs.rmSync(metaPath, { force: true });
     return res.status(410).send('Este enlace ha expirado (válido 24 horas).');
@@ -180,7 +184,7 @@ router.get('/:token', async (req, res) => {
   let comp;
   try {
     comp = await prisma.comprobante.findUnique({
-      where: { id: meta.comprobanteId },
+      where: { id: Number(meta.comprobanteId) },
       include: { comprobanteitem: true, farmacia: true, cliente: true },
     });
   } catch (err) {
@@ -188,7 +192,7 @@ router.get('/:token', async (req, res) => {
     return res.status(500).send('Error al obtener el comprobante.');
   }
 
-  if (!comp) return res.status(404).send('Comprobante no encontrado.');
+  if (!comp) return res.status(404).send('Comprobante no encontrado en el sistema.');
 
   const numero = String(comp.numero || '').padStart(6, '0');
   const filename = `ticket-${comp.serie || 'B001'}-${numero}.pdf`;
