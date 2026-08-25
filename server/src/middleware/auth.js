@@ -75,12 +75,19 @@ const authenticate = async (req, res, next) => {
     }
 
     // Determinar farmaciaId efectiva
-    // 1. Prioridad: Header x-farmacia-id (Enviado por el cliente cuando selecciona una sede)
-    // 2. Query param ?farmaciaId=
-    // 3. Farmacia del token (Si tiene una fija)
-    // 4. Perfil de usuario en DB
-    let effectiveFarmaciaId = req.headers['x-farmacia-id'] || req.query.farmaciaId || tokenFarmaciaId || userFarmaciaId;
-    
+    // SECURITY: el header x-farmacia-id / query ?farmaciaId= SOLO se respeta para
+    // ADMIN (selector de sede en el panel). Un VENDEDOR usa SIEMPRE su propia
+    // farmacia (tokenFarmaciaId/userFarmaciaId, ya verificados arriba) — antes
+    // cualquier cliente HTTP (no solo el frontend oficial) podía mandar ese
+    // header con su propia sesión válida y ver/editar datos de OTRA farmacia
+    // sin ser Admin, saltándose por completo el aislamiento entre farmacias.
+    let effectiveFarmaciaId;
+    if (user.role === 'ADMIN') {
+      effectiveFarmaciaId = req.headers['x-farmacia-id'] || req.query.farmaciaId || tokenFarmaciaId || userFarmaciaId;
+    } else {
+      effectiveFarmaciaId = userFarmaciaId;
+    }
+
     // Si sigue siendo null y es ADMIN, permitimos que siga (pero req.farmaciaId será null)
     // Pero si es VENDEDOR, es un error fatal de contexto
     if (user.role === 'VENDEDOR' && !effectiveFarmaciaId) {
