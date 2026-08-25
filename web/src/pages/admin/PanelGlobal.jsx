@@ -92,7 +92,13 @@ export default function PanelGlobal({
 
   const handleCreate = async (event) => {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    // Guardamos la referencia al form ANTES del await: React invalida
+    // event.currentTarget en cuanto el manejador cede el control (al llegar
+    // al primer await), así que usarlo dentro del callback async fallaba
+    // con "Cannot read properties of null (reading 'reset')" — la farmacia
+    // ya se había creado bien, pero ese error quedaba mostrado en pantalla.
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     const payload = {
       nombre: formData.get("nombre"),
       direccion: formData.get("direccion"),
@@ -101,7 +107,7 @@ export default function PanelGlobal({
       email: formData.get("email"),
     };
     await onCreateFarmacia(payload, () => {
-      event.currentTarget.reset();
+      form.reset();
       setCreateFormKey((prev) => prev + 1);
     });
   };
