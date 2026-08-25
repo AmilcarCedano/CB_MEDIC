@@ -82,6 +82,12 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
   try {
+    // CRÍTICO: La regla debe pertenecer a esta farmacia (0 = regla global de solo lectura)
+    const existing = await prisma.reglaVentaCruzada.findUnique({ where: { id: parseInt(id) } });
+    if (!existing || existing.farmaciaId !== req.farmaciaId) {
+      return res.status(404).json({ error: 'Regla no encontrada' });
+    }
+
     const payload = buildRulePayload(req.body, req.farmaciaId, { includeFarmaciaId: false });
     const updatedRule = await prisma.reglaVentaCruzada.update({
       where: { id: parseInt(id) },
@@ -101,6 +107,12 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
   try {
+    // CRÍTICO: La regla debe pertenecer a esta farmacia
+    const existing = await prisma.reglaVentaCruzada.findUnique({ where: { id: parseInt(id) } });
+    if (!existing || existing.farmaciaId !== req.farmaciaId) {
+      return res.status(404).json({ error: 'Regla no encontrada' });
+    }
+
     await prisma.reglaVentaCruzada.delete({
       where: { id: parseInt(id) },
     });

@@ -77,6 +77,10 @@ router.get('/:id', async (req, res) => {
             }
         });
 
+        if (!comprobante || comprobante.farmaciaId !== req.farmaciaId) {
+            return res.status(404).json({ error: 'Comprobante no encontrado' });
+        }
+
         res.json(comprobante);
     } catch (error) {
         console.error('Error fetching comprobante:', error);

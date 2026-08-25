@@ -52,8 +52,15 @@ router.post('/categorias', async (req, res) => {
 router.put('/categorias/:id', async (req, res) => {
     const { id } = req.params;
     const { nombre, icono } = req.body;
+    const currentFarmaciaId = parseInt(req.farmaciaId);
 
     try {
+        // CRÍTICO: Validar que la categoría pertenezca a esta farmacia
+        const existing = await prisma.categoriaservicio.findUnique({ where: { id: parseInt(id) } });
+        if (!existing || existing.farmaciaId !== currentFarmaciaId) {
+            return res.status(404).json({ error: 'Categoría no encontrada' });
+        }
+
         const categoria = await prisma.categoriaservicio.update({
             where: { id: parseInt(id) },
             data: { nombre, icono }
@@ -68,8 +75,15 @@ router.put('/categorias/:id', async (req, res) => {
 // DELETE /categorias/:id - Eliminar categoría
 router.delete('/categorias/:id', async (req, res) => {
     const { id } = req.params;
+    const currentFarmaciaId = parseInt(req.farmaciaId);
 
     try {
+        // CRÍTICO: Validar que la categoría pertenezca a esta farmacia
+        const existing = await prisma.categoriaservicio.findUnique({ where: { id: parseInt(id) } });
+        if (!existing || existing.farmaciaId !== currentFarmaciaId) {
+            return res.status(404).json({ error: 'Categoría no encontrada' });
+        }
+
         await prisma.categoriaservicio.update({
             where: { id: parseInt(id) },
             data: { activo: false }
@@ -110,12 +124,16 @@ router.get('/', async (req, res) => {
 // GET /:id - Obtener servicio por ID
 router.get('/:id', async (req, res) => {
     const { id } = req.params;
+    const currentFarmaciaId = parseInt(req.farmaciaId);
 
     try {
         const servicio = await prisma.servicio.findUnique({
             where: { id: parseInt(id) },
             include: { categoria: true }
         });
+        if (!servicio || servicio.farmaciaId !== currentFarmaciaId) {
+            return res.status(404).json({ error: 'Servicio no encontrado' });
+        }
         res.json(servicio);
     } catch (error) {
         console.error('Error fetching servicio:', error);
@@ -138,6 +156,12 @@ router.post('/', async (req, res) => {
     } = req.body;
 
     try {
+        // CRÍTICO: La categoría debe pertenecer a esta farmacia
+        const categoria = await prisma.categoriaservicio.findUnique({ where: { id: parseInt(categoriaId) } });
+        if (!categoria || categoria.farmaciaId !== currentFarmaciaId) {
+            return res.status(400).json({ error: 'La categoría no pertenece a esta farmacia' });
+        }
+
         // Calcular costoTotal y utilidad
         const costoTotalCalc = parseFloat(costoInterno || 0) + parseFloat(costoExterno || 0);
         const utilidadCalc = parseFloat(precioVenta) - costoTotalCalc;
@@ -169,6 +193,7 @@ router.post('/', async (req, res) => {
 // PUT /:id - Actualizar servicio
 router.put('/:id', async (req, res) => {
     const { id } = req.params;
+    const currentFarmaciaId = parseInt(req.farmaciaId);
     const {
         nombre,
         codigoSunat,
@@ -181,6 +206,20 @@ router.put('/:id', async (req, res) => {
     } = req.body;
 
     try {
+        // CRÍTICO: Validar que el servicio pertenezca a esta farmacia
+        const existing = await prisma.servicio.findUnique({ where: { id: parseInt(id) } });
+        if (!existing || existing.farmaciaId !== currentFarmaciaId) {
+            return res.status(404).json({ error: 'Servicio no encontrado' });
+        }
+
+        // Si se cambia la categoría, validar que también pertenezca a esta farmacia
+        if (categoriaId !== undefined) {
+            const categoria = await prisma.categoriaservicio.findUnique({ where: { id: parseInt(categoriaId) } });
+            if (!categoria || categoria.farmaciaId !== currentFarmaciaId) {
+                return res.status(400).json({ error: 'La categoría no pertenece a esta farmacia' });
+            }
+        }
+
         // Calcular costoTotal y utilidad
         const costoTotalCalc = parseFloat(costoInterno || 0) + parseFloat(costoExterno || 0);
         const utilidadCalc = parseFloat(precioVenta) - costoTotalCalc;
@@ -212,8 +251,15 @@ router.put('/:id', async (req, res) => {
 // DELETE /:id - Eliminar servicio
 router.delete('/:id', async (req, res) => {
     const { id } = req.params;
+    const currentFarmaciaId = parseInt(req.farmaciaId);
 
     try {
+        // CRÍTICO: Validar que el servicio pertenezca a esta farmacia
+        const existing = await prisma.servicio.findUnique({ where: { id: parseInt(id) } });
+        if (!existing || existing.farmaciaId !== currentFarmaciaId) {
+            return res.status(404).json({ error: 'Servicio no encontrado' });
+        }
+
         await prisma.servicio.update({
             where: { id: parseInt(id) },
             data: { activo: false }

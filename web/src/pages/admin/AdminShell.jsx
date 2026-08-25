@@ -536,9 +536,11 @@ export default function AdminShell({ session, onLogout }) {
       const { data } = await api.post("/farmacias", body);
       setFarmacias((prev) => [data, ...prev]);
       resetCallback();
-      if (!selectedFarmacia) {
-        setSelectedFarmacia(data);
-      }
+      // Entrar directo a la farmacia recién creada: si quedabas dentro de otra
+      // (ej. Pataz) y solo se seleccionaba cuando no había ninguna activa,
+      // parecía que la nueva farmacia "heredaba" los datos de la anterior
+      // porque en realidad seguías viendo el contexto viejo.
+      enterFarmacia(data);
     } catch (err) {
       const status = err?.response?.status;
       let message = "No se pudo crear la farmacia.";

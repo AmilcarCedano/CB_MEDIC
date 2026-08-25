@@ -520,7 +520,7 @@ router.put('/actualizar-ventas/:id', async (req, res) => {
       where: { id: parseInt(id) }
     });
 
-    if (!turno) {
+    if (!turno || turno.farmaciaId !== req.farmaciaId) {
       return res.status(404).json({ error: 'Turno no encontrado' });
     }
 

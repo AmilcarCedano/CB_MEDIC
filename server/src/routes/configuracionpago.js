@@ -172,6 +172,12 @@ router.delete('/:id', async (req, res) => {
 
         if (!farmaciaId) return res.status(400).json({ error: 'Farmacia no identificada' });
 
+        // CRÍTICO: Validar que la configuración pertenezca a esta farmacia
+        const config = await prisma.configuracionpago.findUnique({ where: { id } });
+        if (!config || config.farmaciaId !== farmaciaId) {
+          return res.status(403).json({ error: 'Acceso denegado. Configuración no válida para tu farmacia.' });
+        }
+
         await prisma.configuracionpago.delete({
             where: { id }
         });
