@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Input } from './components/ui.jsx';
 import { api } from '../../lib/api.js';
-import { Settings, Save, Image as ImageIcon, Trash2, Power, PowerOff, ZoomIn, ZoomOut, FileText } from 'lucide-react';
+import { Settings, Save, Image as ImageIcon, Trash2, Power, PowerOff, ZoomIn, ZoomOut, FileText, Download } from 'lucide-react';
 
 export default function ConfiguracionPagos({ farmacia }) {
     const [configs, setConfigs] = useState([]);
@@ -274,21 +274,32 @@ function ConfiguracionGeneralPOS({ farmacia }) {
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Logo de la farmacia (Comprobantes)</label>
                         {config?.comprobanteLogoUrl ? (
-                            <div className="relative border rounded-lg p-3 bg-gray-50 flex flex-col items-center group">
-                                <img
-                                    src={`${serverUrl}${config.comprobanteLogoUrl}`}
-                                    alt="Logo de comprobante"
-                                    className="max-h-28 object-contain rounded"
-                                />
-                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg gap-2">
-                                    <label className="cursor-pointer bg-white text-gray-800 p-2 rounded-full hover:bg-gray-100" title="Reemplazar logo">
-                                        <ImageIcon size={18} />
-                                        <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleLogoUpload} disabled={uploadingLogo} />
-                                    </label>
-                                    <button onClick={handleRemoveLogo} className="bg-red-600 text-white p-2 rounded-full hover:bg-red-700" title="Quitar logo">
-                                        <Trash2 size={18} />
-                                    </button>
+                            <div className="space-y-2">
+                                <div className="relative border rounded-lg p-3 bg-gray-50 flex flex-col items-center group">
+                                    <img
+                                        src={`${serverUrl}${config.comprobanteLogoUrl}`}
+                                        alt="Logo de comprobante"
+                                        className="max-h-28 object-contain rounded"
+                                    />
+                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg gap-2">
+                                        <label className="cursor-pointer bg-white text-gray-800 p-2 rounded-full hover:bg-gray-100" title="Reemplazar logo">
+                                            <ImageIcon size={18} />
+                                            <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleLogoUpload} disabled={uploadingLogo} />
+                                        </label>
+                                        <button onClick={handleRemoveLogo} className="bg-red-600 text-white p-2 rounded-full hover:bg-red-700" title="Quitar logo">
+                                            <Trash2 size={18} />
+                                        </button>
+                                    </div>
                                 </div>
+                                <a
+                                    href={`${serverUrl}${config.comprobanteLogoUrl}`}
+                                    download
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center justify-center gap-2 text-sm font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg py-2 transition-colors"
+                                >
+                                    <Download size={16} /> Descargar logo actual
+                                </a>
                             </div>
                         ) : (
                             <label className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-gray-500 cursor-pointer hover:bg-gray-50 hover:border-indigo-300 transition-colors ${uploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -455,6 +466,15 @@ function ConfigCard({ config, farmacia, onChange, onDelete }) {
                                     </button>
                                 </div>
                             </div>
+                            <a
+                                href={`${serverUrl}${localImage}`}
+                                download
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-2 text-sm font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg py-2 transition-colors"
+                            >
+                                <Download size={16} /> Descargar imagen actual
+                            </a>
                             <div className="flex items-center justify-center gap-4 bg-gray-50 p-2 rounded-lg border border-gray-100">
                                 <button 
                                     onClick={() => setLocalZoom(prev => Math.max(0.5, prev - 0.1))}
