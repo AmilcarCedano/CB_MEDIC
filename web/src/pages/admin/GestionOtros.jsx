@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search, Stethoscope, Save, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Stethoscope, Save, X, Download } from 'lucide-react';
 import { api } from '../../lib/api';
 import { Card, Button, Input, Select } from './components/ui';
 
@@ -21,7 +21,7 @@ const Modal = ({ isOpen, title, onClose, children }) => {
     );
 };
 
-export default function GestionOtros({ farmacia }) {
+export default function GestionOtros({ farmacia, user }) {
     const [servicios, setServicios] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -33,9 +33,21 @@ export default function GestionOtros({ farmacia }) {
     const [formData, setFormData] = useState({
         nombre: '',
         precioVenta: '',
-        categoriaId: '', 
+        categoriaId: '',
         codigoSunat: ''
     });
+
+    // Importar servicios de otra farmacia (solo Admin)
+    const isAdmin = user?.role === 'ADMIN';
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [otrasFarmacias, setOtrasFarmacias] = useState([]);
+    const [origenFarmaciaId, setOrigenFarmaciaId] = useState('');
+    const [serviciosOrigen, setServiciosOrigen] = useState([]);
+    const [serviciosSeleccionados, setServiciosSeleccionados] = useState(new Set());
+    const [loadingOrigen, setLoadingOrigen] = useState(false);
+    const [importando, setImportando] = useState(false);
+    const [importError, setImportError] = useState(null);
+    const [importResult, setImportResult] = useState(null);
 
     const fetchServicios = async () => {
         if (!farmacia?.id) return;
@@ -134,6 +146,74 @@ export default function GestionOtros({ farmacia }) {
         }
     };
 
+    const handleOpenImportModal = async () => {
+        setImportError(null);
+        setImportResult(null);
+        setOrigenFarmaciaId('');
+        setServiciosOrigen([]);
+        setServiciosSeleccionados(new Set());
+        setIsImportModalOpen(true);
+        try {
+            const { data } = await api.get('/farmacias');
+            setOtrasFarmacias(data.filter((f) => f.id !== farmacia.id));
+        } catch (error) {
+            console.error('Error fetching farmacias:', error);
+            setImportError('No se pudieron cargar las demás farmacias.');
+        }
+    };
+
+    const handleSelectOrigen = async (id) => {
+        setOrigenFarmaciaId(id);
+        setServiciosOrigen([]);
+        setServiciosSeleccionados(new Set());
+        setImportError(null);
+        setImportResult(null);
+        if (!id) return;
+        setLoadingOrigen(true);
+        try {
+            const { data } = await api.get('/servicios', { params: { farmaciaId: id } });
+            setServiciosOrigen(data);
+            setServiciosSeleccionados(new Set(data.map((s) => s.id)));
+        } catch (error) {
+            console.error('Error fetching servicios origen:', error);
+            setImportError('No se pudieron cargar los servicios de esa farmacia.');
+        } finally {
+            setLoadingOrigen(false);
+        }
+    };
+
+    const toggleServicioSeleccionado = (id) => {
+        setServiciosSeleccionados((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const handleConfirmarImportacion = async () => {
+        if (serviciosSeleccionados.size === 0) {
+            setImportError('Selecciona al menos un servicio para importar.');
+            return;
+        }
+        setImportando(true);
+        setImportError(null);
+        try {
+            const { data } = await api.post('/servicios/importar', {
+                farmaciaOrigenId: parseInt(origenFarmaciaId),
+                servicioIds: Array.from(serviciosSeleccionados),
+            });
+            setImportResult(data);
+            fetchServicios();
+            fetchCategories();
+        } catch (error) {
+            console.error('Error importing servicios:', error);
+            setImportError(error.response?.data?.error || 'No se pudieron importar los servicios.');
+        } finally {
+            setImportando(false);
+        }
+    };
+
     const handleDelete = async (id) => {
         if (!window.confirm('¿Está seguro de eliminar este servicio?')) return;
         try {
@@ -162,7 +242,12 @@ export default function GestionOtros({ farmacia }) {
                     </h1>
                     <p className="text-gray-500">Administra inyectables, consultas y otros servicios.</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                    {isAdmin && (
+                        <Button variant="secondary" onClick={handleOpenImportModal}>
+                            <Download size={18} /> Importar de otra farmacia
+                        </Button>
+                    )}
                     <Button variant="secondary" onClick={() => setIsCategoryModalOpen(true)}>
                         Gestionar Categorías
                     </Button>
@@ -299,6 +384,71 @@ export default function GestionOtros({ farmacia }) {
 
                     <div className="flex justify-end pt-2">
                         <Button variant="secondary" onClick={() => setIsCategoryModalOpen(false)}>Cerrar</Button>
+                    </div>
+                </div>
+            </Modal>
+
+            <Modal
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                title="Importar servicios de otra farmacia"
+            >
+                <div className="space-y-4">
+                    <p className="text-sm text-gray-500">
+                        Copia servicios ya creados en otra farmacia hacia <strong>{farmacia.nombre}</strong>. Las categorías que falten se crean automáticamente y los servicios que ya existan aquí (mismo nombre) se omiten.
+                    </p>
+
+                    <Select
+                        label="Farmacia de origen"
+                        value={origenFarmaciaId}
+                        onChange={(e) => handleSelectOrigen(e.target.value)}
+                    >
+                        <option value="">Selecciona una farmacia...</option>
+                        {otrasFarmacias.map((f) => (
+                            <option key={f.id} value={f.id}>{f.nombre}</option>
+                        ))}
+                    </Select>
+
+                    {importError && <p className="text-sm text-red-600">{importError}</p>}
+
+                    {importResult && (
+                        <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                            Importados: {importResult.importados} · Omitidos (ya existían): {importResult.omitidos} · Categorías nuevas: {importResult.categoriasCreadas}
+                        </p>
+                    )}
+
+                    {loadingOrigen && <p className="text-sm text-gray-500">Cargando servicios...</p>}
+
+                    {!loadingOrigen && origenFarmaciaId && serviciosOrigen.length === 0 && (
+                        <p className="text-sm text-gray-500">Esa farmacia no tiene servicios registrados.</p>
+                    )}
+
+                    {serviciosOrigen.length > 0 && (
+                        <div className="border rounded-lg divide-y divide-gray-200 max-h-64 overflow-y-auto">
+                            {serviciosOrigen.map((s) => (
+                                <label key={s.id} className="flex items-center gap-3 p-3 text-sm hover:bg-gray-50 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={serviciosSeleccionados.has(s.id)}
+                                        onChange={() => toggleServicioSeleccionado(s.id)}
+                                    />
+                                    <span className="flex-1 font-medium text-gray-800">{s.nombre}</span>
+                                    <span className="text-gray-500">S/ {parseFloat(s.precioVenta || 0).toFixed(2)}</span>
+                                </label>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="flex justify-end gap-3 pt-2">
+                        <Button type="button" variant="secondary" onClick={() => setIsImportModalOpen(false)}>Cerrar</Button>
+                        <Button
+                            type="button"
+                            variant="primary"
+                            disabled={!origenFarmaciaId || serviciosSeleccionados.size === 0 || importando}
+                            onClick={handleConfirmarImportacion}
+                        >
+                            <Download size={18} /> {importando ? 'Importando...' : `Importar (${serviciosSeleccionados.size})`}
+                        </Button>
                     </div>
                 </div>
             </Modal>

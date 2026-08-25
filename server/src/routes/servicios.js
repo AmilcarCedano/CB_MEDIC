@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../lib/prisma');
+const { requireAdmin } = require('../middleware/auth');
 
 // SECURITY: farmaciaId y usuarioId vienen del middleware authenticate (JWT verificado)
 // NO usar req.headers ya que pueden ser suplantados
@@ -98,9 +99,14 @@ router.delete('/categorias/:id', async (req, res) => {
 // ========== SERVICIOS ==========
 
 // GET / - Listar servicios
+// ?farmaciaId= : solo ADMIN puede pedir explicitamente los servicios de OTRA
+// farmacia (se usa para previsualizar antes de importar); cualquier otro rol
+// siempre ve solo los suyos, sin excepcion.
 router.get('/', async (req, res) => {
-    const currentFarmaciaId = parseInt(req.farmaciaId);
-    const { categoriaId, activo } = req.query;
+    const { categoriaId, activo, farmaciaId: queryFarmaciaId } = req.query;
+    const currentFarmaciaId = (req.userRole === 'ADMIN' && queryFarmaciaId)
+        ? parseInt(queryFarmaciaId)
+        : parseInt(req.farmaciaId);
 
     try {
         const where = { farmaciaId: currentFarmaciaId };
@@ -268,6 +274,102 @@ router.delete('/:id', async (req, res) => {
     } catch (error) {
         console.error('Error deleting servicio:', error);
         res.status(500).json({ error: 'Error deleting servicio' });
+    }
+});
+
+// POST /importar - Copiar servicios de OTRA farmacia hacia la farmacia actual (solo ADMIN)
+// Crea las categorías destino que falten (buscando por nombre) y evita duplicar
+// servicios que ya existan en la farmacia actual con el mismo nombre.
+router.post('/importar', requireAdmin, async (req, res) => {
+    const currentFarmaciaId = parseInt(req.farmaciaId);
+    const { farmaciaOrigenId, servicioIds } = req.body || {};
+    const origenId = parseInt(farmaciaOrigenId);
+
+    if (!Number.isFinite(origenId)) {
+        return res.status(400).json({ error: 'Debes indicar la farmacia de origen' });
+    }
+    if (origenId === currentFarmaciaId) {
+        return res.status(400).json({ error: 'La farmacia de origen no puede ser la misma que la actual' });
+    }
+
+    try {
+        const origen = await prisma.farmacia.findUnique({ where: { id: origenId } });
+        if (!origen) return res.status(404).json({ error: 'Farmacia de origen no encontrada' });
+
+        const where = { farmaciaId: origenId, activo: true };
+        if (Array.isArray(servicioIds) && servicioIds.length > 0) {
+            where.id = { in: servicioIds.map(Number) };
+        }
+
+        const serviciosOrigen = await prisma.servicio.findMany({
+            where,
+            include: { categoria: true },
+        });
+
+        if (serviciosOrigen.length === 0) {
+            return res.status(400).json({ error: 'No hay servicios para importar' });
+        }
+
+        const categoriasDestino = await prisma.categoriaservicio.findMany({ where: { farmaciaId: currentFarmaciaId } });
+        const categoriaCache = new Map(categoriasDestino.map(c => [c.nombre.trim().toLowerCase(), c]));
+
+        const serviciosDestino = await prisma.servicio.findMany({
+            where: { farmaciaId: currentFarmaciaId },
+            select: { nombre: true },
+        });
+        const nombresExistentes = new Set(serviciosDestino.map(s => s.nombre.trim().toLowerCase()));
+
+        let importados = 0;
+        let omitidos = 0;
+        let categoriasCreadas = 0;
+
+        await prisma.$transaction(async (tx) => {
+            for (const servicio of serviciosOrigen) {
+                const nombreKey = servicio.nombre.trim().toLowerCase();
+                if (nombresExistentes.has(nombreKey)) {
+                    omitidos++;
+                    continue;
+                }
+
+                const catNombreOrigen = servicio.categoria?.nombre || 'General';
+                const catNombreKey = catNombreOrigen.trim().toLowerCase();
+                let categoriaDestino = categoriaCache.get(catNombreKey);
+                if (!categoriaDestino) {
+                    categoriaDestino = await tx.categoriaservicio.create({
+                        data: {
+                            nombre: catNombreOrigen,
+                            icono: servicio.categoria?.icono || 'Stethoscope',
+                            farmaciaId: currentFarmaciaId,
+                        },
+                    });
+                    categoriaCache.set(catNombreKey, categoriaDestino);
+                    categoriasCreadas++;
+                }
+
+                await tx.servicio.create({
+                    data: {
+                        nombre: servicio.nombre,
+                        codigoSunat: servicio.codigoSunat,
+                        categoriaId: categoriaDestino.id,
+                        proveedorTipo: servicio.proveedorTipo,
+                        proveedorNombre: servicio.proveedorNombre,
+                        costoInterno: servicio.costoInterno,
+                        costoExterno: servicio.costoExterno,
+                        costoTotal: servicio.costoTotal,
+                        precioVenta: servicio.precioVenta,
+                        utilidad: servicio.utilidad,
+                        farmaciaId: currentFarmaciaId,
+                    },
+                });
+                nombresExistentes.add(nombreKey);
+                importados++;
+            }
+        });
+
+        res.json({ importados, omitidos, categoriasCreadas, total: serviciosOrigen.length });
+    } catch (error) {
+        console.error('Error importing servicios:', error);
+        res.status(500).json({ error: 'No se pudieron importar los servicios' });
     }
 });
 
