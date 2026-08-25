@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const prisma = require('../lib/prisma');
+const { requireAdmin } = require('../middleware/auth');
 
 router.get('/', async (req, res) => {
   try {
@@ -109,6 +110,68 @@ router.delete('/:id', async (req, res) => {
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'No se pudo eliminar la categoria' });
+  }
+});
+
+// POST /importar - Copiar categorías de OTRA farmacia hacia la farmacia actual (solo ADMIN)
+// Omite las que ya existan en la farmacia actual con el mismo nombre.
+router.post('/importar', requireAdmin, async (req, res) => {
+  const currentFarmaciaId = req.farmaciaId;
+  const { farmaciaOrigenId, categoriaIds } = req.body || {};
+  const origenId = parseInt(farmaciaOrigenId);
+
+  if (!Number.isFinite(origenId)) {
+    return res.status(400).json({ error: 'Debes indicar la farmacia de origen' });
+  }
+  if (origenId === currentFarmaciaId) {
+    return res.status(400).json({ error: 'La farmacia de origen no puede ser la misma que la actual' });
+  }
+
+  try {
+    const origen = await prisma.farmacia.findUnique({ where: { id: origenId } });
+    if (!origen) return res.status(404).json({ error: 'Farmacia de origen no encontrada' });
+
+    const where = { farmaciaId: origenId };
+    if (Array.isArray(categoriaIds) && categoriaIds.length > 0) {
+      where.id = { in: categoriaIds.map(Number) };
+    }
+
+    const categoriasOrigen = await prisma.categoria.findMany({ where });
+    if (categoriasOrigen.length === 0) {
+      return res.status(400).json({ error: 'No hay categorías para importar' });
+    }
+
+    const categoriasDestino = await prisma.categoria.findMany({
+      where: { farmaciaId: currentFarmaciaId },
+      select: { nombre: true },
+    });
+    const nombresExistentes = new Set(categoriasDestino.map((c) => c.nombre.trim().toLowerCase()));
+
+    let importadas = 0;
+    let omitidas = 0;
+
+    await prisma.$transaction(async (tx) => {
+      for (const cat of categoriasOrigen) {
+        const key = cat.nombre.trim().toLowerCase();
+        if (nombresExistentes.has(key)) {
+          omitidas++;
+          continue;
+        }
+        await tx.categoria.create({
+          data: { nombre: cat.nombre, farmaciaId: currentFarmaciaId, isMaster: false },
+        });
+        nombresExistentes.add(key);
+        importadas++;
+      }
+    });
+
+    res.json({ importadas, omitidas, total: categoriasOrigen.length });
+  } catch (err) {
+    console.error('Error importing categorias:', err);
+    if (err.code === 'P2002') {
+      return res.status(409).json({ error: 'Alguna categoría ya existe en la farmacia actual' });
+    }
+    res.status(500).json({ error: 'No se pudieron importar las categorías' });
   }
 });
 
