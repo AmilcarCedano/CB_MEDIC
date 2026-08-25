@@ -495,6 +495,7 @@ model servicio {
   precioVenta             Decimal                   @db.Decimal(10, 2)
   utilidad                Decimal                   @db.Decimal(10, 2)
   activo                  Boolean                   @default(true)
+  permiteEditar           Boolean                   @default(false)
   farmaciaId              Int
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime                  @updatedAt

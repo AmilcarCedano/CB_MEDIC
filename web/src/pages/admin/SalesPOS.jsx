@@ -160,6 +160,7 @@ export default function SalesPOS({ farmacia, user }) {
     const [habitualItems, setHabitualItems] = useState([]);
     const [editingPriceItem, setEditingPriceItem] = useState(null);
     const [newPriceValue, setNewPriceValue] = useState("");
+    const [newNameValue, setNewNameValue] = useState("");
     const [loadingHabitual, setLoadingHabitual] = useState(false);
     const [expiryAlert, setExpiryAlert] = useState(null); // { product, type, message }
 
@@ -512,6 +513,7 @@ export default function SalesPOS({ farmacia, user }) {
                 stockActual: product.stockActual ?? 999,
                 quantity: quantity,
                 codigoBarras: product.codigoBarras ?? '',
+                permiteEditar: product.tipo === 'servicio' ? !!product.permiteEditar : false,
             };
 
             const existingIndex = prev.findIndex(item => String(item.id) === String(product.id) && item.tipo === normalizedProduct.tipo);
@@ -569,34 +571,47 @@ export default function SalesPOS({ farmacia, user }) {
 
     const handleUpdatePrice = async () => {
         if (!editingPriceItem) return;
+        const isEditableService = editingPriceItem.tipo === 'servicio' && editingPriceItem.permiteEditar;
         const newPrice = parseFloat(newPriceValue);
-        
-        if (isNaN(newPrice)) {
+
+        if (isNaN(newPrice) || newPrice <= 0) {
             alert("Ingrese un precio válido.");
             return;
         }
 
-        if (newPrice < editingPriceItem.originalPrice) {
+        // Los servicios marcados como editables pueden ponerse en cualquier
+        // precio (para eso existen); todo lo demás mantiene la regla de
+        // "solo se puede subir el precio base".
+        if (!isEditableService && newPrice < editingPriceItem.originalPrice) {
             alert(`No se puede bajar el precio. El precio base es S/ ${editingPriceItem.originalPrice.toFixed(2)}`);
             return;
         }
 
-        const oldPrice = editingPriceItem.price;
-        const itemName = editingPriceItem.nombre;
+        const newName = isEditableService ? newNameValue.trim() : editingPriceItem.nombre;
+        if (isEditableService && !newName) {
+            alert("Ingrese un nombre para el servicio.");
+            return;
+        }
 
-        setCart(cart.map(item => 
-            (item.id === editingPriceItem.id && item.tipo === editingPriceItem.tipo) 
-            ? { ...item, price: newPrice } 
+        const oldPrice = editingPriceItem.price;
+        const oldName = editingPriceItem.nombre;
+
+        setCart(cart.map(item =>
+            (item.id === editingPriceItem.id && item.tipo === editingPriceItem.tipo)
+            ? { ...item, price: newPrice, nombre: newName }
             : item
         ));
 
         // Auditar el cambio
         try {
+            const descripcion = isEditableService
+                ? `Servicio editado en Carrito: "${oldName}" (S/ ${oldPrice.toFixed(2)}) -> "${newName}" (S/ ${newPrice.toFixed(2)})`
+                : `Precio aumentado en Carrito: ${oldName}. De S/ ${oldPrice.toFixed(2)} a S/ ${newPrice.toFixed(2)}`;
             await api.post('/auditoria', {
                 farmaciaId: farmacia.id,
                 modulo: 'VENTAS',
                 accion: 'EDITAR',
-                descripcion: `Precio aumentado en Carrito: ${itemName}. De S/ ${oldPrice.toFixed(2)} a S/ ${newPrice.toFixed(2)}`,
+                descripcion,
                 usuarioId: user?.id
             });
         } catch (err) {
@@ -605,6 +620,7 @@ export default function SalesPOS({ farmacia, user }) {
 
         setEditingPriceItem(null);
         setNewPriceValue("");
+        setNewNameValue("");
     };
 
     const updateQuantity = (id, delta) => {
@@ -962,7 +978,10 @@ export default function SalesPOS({ farmacia, user }) {
                 cart: cart.map(item => ({
                     productId: item.tipo === 'promo' ? item.promoId : Number(item.id),
                     quantity: Number(item.quantity),
-                    type: item.tipo === 'servicio' ? 'SERVICE' : (item.tipo === 'promo' ? 'PROMO' : 'PRODUCT')
+                    type: item.tipo === 'servicio' ? 'SERVICE' : (item.tipo === 'promo' ? 'PROMO' : 'PRODUCT'),
+                    // Solo tiene efecto si el servicio está marcado como "permiteEditar"
+                    // en su ficha - el backend vuelve a validar eso, no confía en esto.
+                    ...(item.tipo === 'servicio' ? { nombrePersonalizado: item.nombre, precioUnitario: item.price } : {}),
                 })),
                 clienteId: !client || client.id === 0 ? null : client.id,
                 metodoPago: paymentMethod,
@@ -1509,13 +1528,15 @@ export default function SalesPOS({ farmacia, user }) {
                                         <p className="font-bold text-sm text-gray-900 leading-tight truncate" title={item.nombre}>{item.nombre}</p>
                                         <div className="flex items-center gap-2 mt-0.5">
                                             <p className="text-[10px] text-gray-500 font-medium">S/ {item.price.toFixed(2)} / ud.</p>
-                                            <button 
-                                                onClick={() => { setEditingPriceItem(item); setNewPriceValue(item.price.toString()); }}
-                                                className="px-1.5 py-0.5 flex items-center gap-1 text-[9px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md border border-indigo-100 transition-colors"
-                                                title="Aumentar precio"
-                                            >
-                                                <Edit size={10} /> EDITAR
-                                            </button>
+                                            {(item.tipo === 'producto' || (item.tipo === 'servicio' && item.permiteEditar)) && (
+                                                <button
+                                                    onClick={() => { setEditingPriceItem(item); setNewPriceValue(item.price.toString()); setNewNameValue(item.nombre); }}
+                                                    className="px-1.5 py-0.5 flex items-center gap-1 text-[9px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md border border-indigo-100 transition-colors"
+                                                    title={item.tipo === 'servicio' ? 'Editar nombre y precio' : 'Aumentar precio'}
+                                                >
+                                                    <Edit size={10} /> EDITAR
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
 
@@ -1997,25 +2018,48 @@ export default function SalesPOS({ farmacia, user }) {
 
             <Modal
                 isOpen={!!editingPriceItem}
-                title="Aumentar Precio de Producto"
+                title={editingPriceItem?.tipo === 'servicio' ? 'Editar Servicio' : 'Aumentar Precio de Producto'}
                 onClose={() => setEditingPriceItem(null)}
             >
                 <div className="space-y-4">
-                    <p className="text-sm text-gray-600">
-                        Editando: <span className="font-bold">{editingPriceItem?.nombre}</span>
-                    </p>
-                    <div className="p-3 bg-indigo-50 rounded-lg text-sm text-indigo-700">
-                        Precio Base: <span className="font-bold">S/ {editingPriceItem?.originalPrice.toFixed(2)}</span>
-                        <p className="text-[10px] mt-1 italic">* Por política, solo se permite aumentar el precio inicial.</p>
-                    </div>
-                    <Input
-                        label="Nuevo Precio"
-                        type="number"
-                        step="0.01"
-                        min={editingPriceItem?.originalPrice}
-                        value={newPriceValue}
-                        onChange={(e) => setNewPriceValue(e.target.value)}
-                    />
+                    {editingPriceItem?.tipo === 'servicio' ? (
+                        <>
+                            <p className="text-sm text-gray-600">
+                                Este servicio permite escribir el nombre y precio que se van a facturar en esta venta.
+                            </p>
+                            <Input
+                                label="Nombre a facturar"
+                                value={newNameValue}
+                                onChange={(e) => setNewNameValue(e.target.value)}
+                            />
+                            <Input
+                                label="Precio (S/)"
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                value={newPriceValue}
+                                onChange={(e) => setNewPriceValue(e.target.value)}
+                            />
+                        </>
+                    ) : (
+                        <>
+                            <p className="text-sm text-gray-600">
+                                Editando: <span className="font-bold">{editingPriceItem?.nombre}</span>
+                            </p>
+                            <div className="p-3 bg-indigo-50 rounded-lg text-sm text-indigo-700">
+                                Precio Base: <span className="font-bold">S/ {editingPriceItem?.originalPrice.toFixed(2)}</span>
+                                <p className="text-[10px] mt-1 italic">* Por política, solo se permite aumentar el precio inicial.</p>
+                            </div>
+                            <Input
+                                label="Nuevo Precio"
+                                type="number"
+                                step="0.01"
+                                min={editingPriceItem?.originalPrice}
+                                value={newPriceValue}
+                                onChange={(e) => setNewPriceValue(e.target.value)}
+                            />
+                        </>
+                    )}
                     <div className="flex gap-2">
                         <Button variant="outline" className="flex-1" onClick={() => setEditingPriceItem(null)}>Cancelar</Button>
                         <Button variant="primary" className="flex-1" onClick={handleUpdatePrice}>Guardar Cambio</Button>

@@ -323,13 +323,26 @@ router.post('/', async (req, res) => {
       for (const item of serviceItems) {
         const dbService = servicesInDb.find(s => s.id === item.productId);
         if (!dbService) throw new Error(`Servicio con ID ${item.productId} no encontrado.`);
+
+        // Solo si el servicio está marcado como "permiteEditar" se acepta el
+        // nombre/precio que mandó el carrito - para el resto SIEMPRE se usa
+        // lo que dice la ficha del servicio, sin importar qué mande el cliente.
+        let nombreFinal = dbService.nombre;
+        let precioFinal = parseFloat(dbService.precioVenta);
+        if (dbService.permiteEditar) {
+          const nombrePersonalizado = typeof item.nombrePersonalizado === 'string' ? item.nombrePersonalizado.trim() : '';
+          const precioPersonalizado = Number(item.precioUnitario);
+          if (nombrePersonalizado) nombreFinal = nombrePersonalizado.slice(0, 200);
+          if (Number.isFinite(precioPersonalizado) && precioPersonalizado > 0) precioFinal = precioPersonalizado;
+        }
+
         processedItems.push({
           ...item,
           type: 'SERVICE',
           dbId: dbService.id,
-          nombre: dbService.nombre,
+          nombre: nombreFinal,
           codigo: dbService.codigoSunat || 'SERV',
-          precioUnitario: parseFloat(dbService.precioVenta),
+          precioUnitario: precioFinal,
           quantity: item.quantity
         });
       }

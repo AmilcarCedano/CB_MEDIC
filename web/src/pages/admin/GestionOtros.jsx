@@ -34,7 +34,8 @@ export default function GestionOtros({ farmacia, user }) {
         nombre: '',
         precioVenta: '',
         categoriaId: '',
-        codigoSunat: ''
+        codigoSunat: '',
+        permiteEditar: false
     });
 
     // Importar servicios de otra farmacia (solo Admin)
@@ -92,7 +93,8 @@ export default function GestionOtros({ farmacia, user }) {
                 nombre: service.nombre,
                 precioVenta: service.precioVenta,
                 categoriaId: service.categoriaId || 1,
-                codigoSunat: service.codigoSunat || ''
+                codigoSunat: service.codigoSunat || '',
+                permiteEditar: !!service.permiteEditar
             });
         } else {
             setCurrentService(null);
@@ -100,7 +102,8 @@ export default function GestionOtros({ farmacia, user }) {
                 nombre: '',
                 precioVenta: '',
                 categoriaId: categories.length > 0 ? categories[0].id : '',
-                codigoSunat: ''
+                codigoSunat: '',
+                permiteEditar: false
             });
         }
         setIsModalOpen(true);
@@ -285,7 +288,14 @@ export default function GestionOtros({ farmacia, user }) {
                             ) : (
                                 filteredServicios.map(servicio => (
                                     <tr key={servicio.id} className="border-b border-gray-100 hover:bg-gray-50">
-                                        <td className="p-4 font-medium">{servicio.nombre}</td>
+                                        <td className="p-4 font-medium">
+                                            {servicio.nombre}
+                                            {servicio.permiteEditar && (
+                                                <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold align-middle">
+                                                    EDITABLE EN VENTA
+                                                </span>
+                                            )}
+                                        </td>
                                         <td className="p-4 text-sm text-gray-500">
                                             {categories.find(c => c.id === servicio.categoriaId)?.nombre || 'General'}
                                         </td>
@@ -338,6 +348,19 @@ export default function GestionOtros({ farmacia, user }) {
                         required
                         placeholder="0.00"
                     />
+                    <label className="flex items-start gap-3 p-3 rounded-xl border border-amber-200 bg-amber-50 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            checked={formData.permiteEditar}
+                            onChange={(e) => setFormData({ ...formData, permiteEditar: e.target.checked })}
+                        />
+                        <span className="text-sm text-amber-800">
+                            <span className="font-bold">Permitir editar nombre y precio al vender</span>
+                            <br />
+                            El nombre y precio de arriba quedan solo como valores por defecto. En el punto de venta, quien cobre podrá escribir un nombre y precio distintos cada vez, y eso es lo que saldrá en la factura. Útil para servicios variables (ej. "Otros" / "Varios").
+                        </span>
+                    </label>
                     <div className="flex justify-end gap-3 pt-4">
                         <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
                         <Button type="submit" variant="primary">

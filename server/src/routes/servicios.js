@@ -158,7 +158,8 @@ router.post('/', async (req, res) => {
         proveedorNombre,
         costoInterno,
         costoExterno,
-        precioVenta
+        precioVenta,
+        permiteEditar
     } = req.body;
 
     try {
@@ -184,6 +185,7 @@ router.post('/', async (req, res) => {
                 costoTotal: costoTotalCalc,
                 precioVenta: parseFloat(precioVenta),
                 utilidad: utilidadCalc,
+                permiteEditar: permiteEditar === true || permiteEditar === 'true',
                 farmaciaId: currentFarmaciaId
             },
             include: { categoria: true }
@@ -208,7 +210,8 @@ router.put('/:id', async (req, res) => {
         proveedorNombre,
         costoInterno,
         costoExterno,
-        precioVenta
+        precioVenta,
+        permiteEditar
     } = req.body;
 
     try {
@@ -242,7 +245,8 @@ router.put('/:id', async (req, res) => {
                 costoExterno: parseFloat(costoExterno || 0),
                 costoTotal: costoTotalCalc,
                 precioVenta: parseFloat(precioVenta),
-                utilidad: utilidadCalc
+                utilidad: utilidadCalc,
+                ...(permiteEditar !== undefined ? { permiteEditar: permiteEditar === true || permiteEditar === 'true' } : {})
             },
             include: { categoria: true }
         });
