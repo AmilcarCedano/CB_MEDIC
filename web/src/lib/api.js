@@ -3,18 +3,16 @@ import { setSessionNotice } from "./sessionMessages.js";
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "",
+  // El token de sesión viaja en una cookie httpOnly (cb_token), no en JS —
+  // withCredentials hace que el navegador la mande/reciba en cada request.
+  withCredentials: true,
 });
 
-// Interceptor para agregar headers de sesión y autenticación
+// Interceptor de request: agrega headers auxiliares NO sensibles (contexto
+// de farmacia seleccionada, hints de usuario para filtros). La autenticación
+// real va en la cookie httpOnly, enviada automáticamente por el navegador.
 api.interceptors.request.use((config) => {
-  // Agregar Token de Autenticación (Bearer)
-  const token = localStorage.getItem('cb_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-
-  // Agregar headers auxiliares para compatibilidad legacy o filtros específicos
-  const userStr = localStorage.getItem('cb_user') || localStorage.getItem('user');
+  const userStr = localStorage.getItem('cb_user');
   const targetFarmaciaId = localStorage.getItem('cb_target_farmacia_id');
 
   if (targetFarmaciaId) {
@@ -37,19 +35,17 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Interceptor de respuesta: si el token quedó inválido o expiró (401) con una
-// sesión que ya estaba iniciada, cerramos sesión sola en vez de dejar que
-// cada pantalla muestre su propio error crudo. El login (que también puede
-// devolver 401 por credenciales incorrectas) queda excluido a propósito.
+// Interceptor de respuesta: ante un 401 en una request ya autenticada (no el
+// login ni la verificación de sesión al arrancar la app), cerramos sesión
+// sola en vez de dejar que cada pantalla muestre su propio error crudo.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error?.response?.status;
     const requestUrl = error?.config?.url || '';
-    const isLoginRequest = requestUrl.includes('/auth/login');
-    const hadSession = !!localStorage.getItem('cb_token');
+    const isAuthBootstrap = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/me');
 
-    if (status === 401 && !isLoginRequest && hadSession) {
+    if (status === 401 && !isAuthBootstrap) {
       setSessionNotice('expired');
       window.dispatchEvent(new CustomEvent('cb:session-expired'));
     }
@@ -57,11 +53,3 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
-export function setAuthToken(token) {
-  if (token) {
-    api.defaults.headers.common.Authorization = `Bearer ${token}`;
-  } else {
-    delete api.defaults.headers.common.Authorization;
-  }
-}

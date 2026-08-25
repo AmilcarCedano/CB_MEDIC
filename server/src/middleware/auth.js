@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const prisma = require('../lib/prisma');
+const { COOKIE_NAME } = require('../lib/authCookie');
 
 /**
  * Middleware de autenticación JWT
@@ -8,13 +9,15 @@ const prisma = require('../lib/prisma');
  */
 const authenticate = async (req, res, next) => {
   try {
-    // Obtener token del header Authorization: Bearer <token>
+    // El token viaja en una cookie httpOnly (cb_token). Se mantiene el header
+    // Authorization: Bearer <token> como fallback por compatibilidad.
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
+    const token = req.cookies?.[COOKIE_NAME] || bearerToken;
+
+    if (!token) {
       return res.status(401).json({ error: 'Token de autenticación requerido' });
     }
-
-    const token = authHeader.substring(7); // Remover 'Bearer '
 
     // Verificar JWT_SECRET
     if (!process.env.JWT_SECRET) {

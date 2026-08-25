@@ -3,10 +3,9 @@ import Login from "./pages/Login.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import AdminShell from "./pages/admin/AdminShell.jsx";
 import LoadingScreen from "./components/LoadingScreen.jsx";
-import { setAuthToken } from "./lib/api.js";
+import { api } from "./lib/api.js";
 import "./App.css";
 
-const TOKEN_KEY = "cb_token";
 const USER_KEY = "cb_user";
 const SOURCE_KEY = "cb_source";
 
@@ -23,43 +22,41 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  // El token vive en una cookie httpOnly (no accesible desde JS), así que la
+  // única forma confiable de restaurar la sesión al recargar es preguntarle
+  // al backend (la cookie viaja sola en la request gracias a withCredentials).
   useEffect(() => {
     if (bootstrapped) return;
-    try {
-      const token = window.localStorage.getItem(TOKEN_KEY);
-      const rawUser = window.localStorage.getItem(USER_KEY);
-      const source = window.localStorage.getItem(SOURCE_KEY) || "api";
-      if (rawUser) {
-        const user = JSON.parse(rawUser);
-        if (token) setAuthToken(token);
-        setSession({ token: token || null, user, source });
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get("/auth/me");
+        if (cancelled) return;
+        const source = window.localStorage.getItem(SOURCE_KEY) || "api";
+        setSession({ user: data.user, source });
+        window.localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+      } catch {
+        // Sin sesión válida (nunca inició sesión, o la cookie expiró/es inválida)
+        window.localStorage.removeItem(USER_KEY);
+        window.localStorage.removeItem(SOURCE_KEY);
+      } finally {
+        if (!cancelled) setBootstrapped(true);
       }
-    } catch (err) {
-      console.warn("No se pudo recuperar la sesion:", err);
-      window.localStorage.removeItem(TOKEN_KEY);
-      window.localStorage.removeItem(USER_KEY);
-      window.localStorage.removeItem(SOURCE_KEY);
-    } finally {
-      setBootstrapped(true);
-    }
+    })();
+    return () => { cancelled = true; };
   }, [bootstrapped]);
 
-  const handleLoginSuccess = ({ token = null, user, source = "api" }) => {
-    if (token) setAuthToken(token);
-    else setAuthToken(null);
-    setSession({ token: token || null, user, source });
-    if (token) window.localStorage.setItem(TOKEN_KEY, token);
-    else window.localStorage.removeItem(TOKEN_KEY);
+  const handleLoginSuccess = ({ user, source = "api" }) => {
+    setSession({ user, source });
     window.localStorage.setItem(USER_KEY, JSON.stringify(user));
     window.localStorage.setItem(SOURCE_KEY, source);
   };
 
   const handleLogout = () => {
     setSession(null);
-    setAuthToken(null);
-    window.localStorage.removeItem(TOKEN_KEY);
     window.localStorage.removeItem(USER_KEY);
     window.localStorage.removeItem(SOURCE_KEY);
+    api.post("/auth/logout").catch(() => {});
   };
 
   // Si el interceptor de axios detecta un 401 (token inválido/expirado) en

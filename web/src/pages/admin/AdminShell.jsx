@@ -601,17 +601,12 @@ export default function AdminShell({ session, onLogout }) {
     setDeleteLoading(true);
     setDeleteError(null);
     try {
-      // Reforzamos el token directamente en la petición por si el interceptor falla
-      const token = localStorage.getItem('cb_token');
-      
+      // La cookie httpOnly viaja sola en la request (withCredentials en api.js)
       await api.delete(`/farmacias/${deleteTarget.id}`, {
         data: {
           adminUsername,
           adminPassword: deletePassword,
         },
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
       });
 
       const updated = farmacias.filter((f) => f.id !== deleteTarget.id);

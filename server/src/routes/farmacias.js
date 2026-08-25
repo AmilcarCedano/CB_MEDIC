@@ -95,18 +95,10 @@ router.delete('/:id', requireAdmin, async (req, res) => {
     try {
       validPassword = await bcrypt.compare(adminPassword, adminUser.passwordHash);
     } catch (bcryptErr) {
-      if (adminUser.passwordHash === adminPassword) {
-        console.warn(`[WARN] Usuario Admin ${adminUsername} tiene contraseña en texto plano.`);
-        validPassword = true;
-      }
-    }
-    if (!validPassword && adminUser.passwordHash === adminPassword) {
-      console.warn(`[WARN] Usuario Admin ${adminUsername} validado con texto plano fallback.`);
-      validPassword = true;
+      console.error('[Auth] Error comparando contraseña:', bcryptErr);
     }
 
     if (!validPassword) {
-      console.log('DEBUG: Password validation failed for user:', adminUsername);
       return res.status(401).json({ error: 'Credenciales invalidas' });
     }
 

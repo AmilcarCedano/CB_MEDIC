@@ -139,11 +139,6 @@ router.post('/cerrar-turno/:id', async (req, res) => {
       console.error('Error bcrypt match:', bcryptError);
     }
 
-    // Fallback texto plano (solo para casos legados si existen)
-    if (!passwordMatch && usuario.passwordHash === password) {
-      passwordMatch = true;
-    }
-
     if (!passwordMatch) {
       return res.status(401).json({ error: 'Contraseña incorrecta' });
     }
