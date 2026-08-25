@@ -11,23 +11,32 @@ router.get('/stats', async (req, res) => {
     const hasta = req.query.hasta ? (() => { const d = new Date(req.query.hasta); d.setHours(23,59,59,999); return d; })() : new Date();
 
     // --- KPIs Filtrados por Periodo ---
-    const [totalProductos, productosStockBajo, totalClientes, periodVentasAgg] = await Promise.all([
+    const [totalProductos, productosStockBajo, totalClientes, periodVentasAgg, periodDevolucionesAgg] = await Promise.all([
       prisma.producto.count({ where: { farmaciaId } }),
       prisma.producto.count({ where: { farmaciaId, stockActual: { lte: 5 } } }),
       prisma.cliente.count({ where: { farmaciaId } }),
       prisma.comprobante.aggregate({
-        where: { 
-          farmaciaId, 
+        where: {
+          farmaciaId,
           fecha_emision: { gte: desde, lte: hasta },
-          estado_sunat: { not: 'ANULADO' } 
+          estado_sunat: { not: 'ANULADO' }
         },
         _count: true,
         _sum: { total: true },
       }),
+      // Devoluciones del período (se asocian por la fecha en que se hizo la devolución, no la venta)
+      prisma.devolucion.aggregate({
+        where: { farmaciaId, fecha: { gte: desde, lte: hasta } },
+        _count: true,
+        _sum: { totalDevuelto: true },
+      }),
     ]);
 
     const totalVentasPeriodo = periodVentasAgg._count || 0;
-    const totalRevenue = Number(periodVentasAgg._sum.total || 0);
+    const totalDevoluciones = periodDevolucionesAgg._count || 0;
+    const montoDevuelto = Number(periodDevolucionesAgg._sum.totalDevuelto || 0);
+    // "Ventas Período" es neto de devoluciones: una venta devuelta no es ganancia real.
+    const totalRevenue = Number(periodVentasAgg._sum.total || 0) - montoDevuelto;
 
     // --- Ventas detalladas (todas las ventas individuales) ---
     const ventas = await prisma.comprobante.findMany({
@@ -160,6 +169,8 @@ router.get('/stats', async (req, res) => {
         totalClientes,
         totalVentasPeriodo,
         totalRevenue,
+        totalDevoluciones,
+        montoDevuelto,
         ventasHoy: Number(ventasHoyAgg._sum.total || 0),
         ventasHoyCount: ventasHoyAgg._count || 0,
       },

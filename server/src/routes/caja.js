@@ -4,6 +4,7 @@ const prisma = require('../lib/prisma');
 const bcrypt = require('bcryptjs');
 const { logAudit } = require('../lib/audit');
 const { requireAdmin } = require('../middleware/auth');
+const { round2 } = require('../lib/money');
 
 // SECURITY: farmaciaId, userId y userRole ya vienen del middleware authenticate (JWT verificado)
 // NO usar req.headers['x-farmacia-id'] ya que pueden ser suplantados
@@ -45,8 +46,8 @@ router.get('/turno-activo', async (req, res) => {
       include: { devolucion: { select: { totalDevuelto: true } } },
     });
     const montoVentasNeto = comprobantesDelTurno.reduce((sum, c) => {
-      const devuelto = c.devolucion.reduce((d, dev) => d + Number(dev.totalDevuelto || 0), 0);
-      return sum + Number(c.total) - devuelto;
+      const devuelto = round2(c.devolucion.reduce((d, dev) => d + Number(dev.totalDevuelto || 0), 0));
+      return round2(sum + Number(c.total) - devuelto);
     }, 0);
 
     res.json({ ...turno, montoVentas: montoVentasNeto });
@@ -173,11 +174,11 @@ router.post('/cerrar-turno/:id', async (req, res) => {
       include: { devolucion: { select: { totalDevuelto: true } } },
     });
     const montoVentas = comprobantesParaCierre.reduce((sum, c) => {
-      const devuelto = c.devolucion.reduce((d, dev) => d + Number(dev.totalDevuelto || 0), 0);
-      return sum + Number(c.total) - devuelto;
+      const devuelto = round2(c.devolucion.reduce((d, dev) => d + Number(dev.totalDevuelto || 0), 0));
+      return round2(sum + Number(c.total) - devuelto);
     }, 0);
-    const montoEgresos = Number(turno.montoEgresos) || 0;
-    const montoFinal = Number(turno.montoInicial) + montoVentas - montoEgresos;
+    const montoEgresos = round2(Number(turno.montoEgresos) || 0);
+    const montoFinal = round2(Number(turno.montoInicial) + montoVentas - montoEgresos);
 
     const turnoCerrado = await prisma.turnocaja.update({
       where: { id: turno.id },
@@ -245,7 +246,7 @@ router.post('/registrar-egreso', async (req, res) => {
         }
       });
 
-      const nuevoMontoEgresos = parseFloat(turnoActivo.montoEgresos) + parseFloat(monto);
+      const nuevoMontoEgresos = round2(parseFloat(turnoActivo.montoEgresos) + parseFloat(monto));
 
       await tx.turnocaja.update({
         where: { id: turnoActivo.id },
@@ -302,7 +303,7 @@ router.put('/egreso/:id', async (req, res) => {
       await tx.turnocaja.update({
         where: { id: egreso.turnoId },
         data: {
-          montoEgresos: parseFloat(egreso.turno.montoEgresos) + diferencia
+          montoEgresos: round2(parseFloat(egreso.turno.montoEgresos) + diferencia)
         }
       });
 
@@ -344,7 +345,7 @@ router.delete('/egreso/:id', async (req, res) => {
       await tx.turnocaja.update({
         where: { id: egreso.turnoId },
         data: {
-          montoEgresos: parseFloat(egreso.turno.montoEgresos) - parseFloat(egreso.monto)
+          montoEgresos: round2(parseFloat(egreso.turno.montoEgresos) - parseFloat(egreso.monto))
         }
       });
     });
@@ -387,8 +388,8 @@ router.get('/historial', async (req, res) => {
         include: { devolucion: { select: { totalDevuelto: true } } },
       });
       const montoVentasNeto = comprobantes.reduce((sum, c) => {
-        const devuelto = c.devolucion.reduce((d, dev) => d + Number(dev.totalDevuelto || 0), 0);
-        return sum + Number(c.total) - devuelto;
+        const devuelto = round2(c.devolucion.reduce((d, dev) => d + Number(dev.totalDevuelto || 0), 0));
+        return round2(sum + Number(c.total) - devuelto);
       }, 0);
       return { ...t, montoVentas: montoVentasNeto };
     }));
@@ -484,8 +485,8 @@ router.get('/monitor', async (req, res) => {
       ]);
 
       const montoVentasNeto = comprobantesDelTurno.reduce((sum, c) => {
-        const devuelto = c.devolucion.reduce((d, dev) => d + Number(dev.totalDevuelto || 0), 0);
-        return sum + Number(c.total) - devuelto;
+        const devuelto = round2(c.devolucion.reduce((d, dev) => d + Number(dev.totalDevuelto || 0), 0));
+        return round2(sum + Number(c.total) - devuelto);
       }, 0);
 
       return {

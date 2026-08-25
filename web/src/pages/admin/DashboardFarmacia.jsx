@@ -3,7 +3,7 @@ import { api } from '../../lib/api';
 import { Card, Button, Input } from './components/ui';
 import {
   BarChart3, TrendingUp, Package, Users, ShoppingCart, AlertTriangle,
-  Clock, DollarSign, RefreshCw, Calendar, ArrowUp, ArrowDown, CreditCard, FileText, Download
+  Clock, DollarSign, RefreshCw, Calendar, ArrowUp, ArrowDown, CreditCard, FileText, Download, Undo2
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -526,6 +526,28 @@ const DashboardFarmacia = ({ farmacia }) => {
           )}
         </Card>
       </div>
+
+      {/* Devoluciones del período — se descuentan de "Ventas Período", no cuentan como ganancia */}
+      <Card className="!shadow-sm border border-gray-100 !p-4 sm:!p-6">
+        <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+          <span className="w-8 h-8 rounded-lg bg-rose-50 flex items-center justify-center">
+            <Undo2 size={18} className="text-rose-600" />
+          </span>
+          Devoluciones del Período
+        </h3>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1 bg-rose-50/60 rounded-xl p-4 border border-rose-100">
+            <p className="text-xs font-semibold uppercase tracking-wide text-rose-600">Cantidad</p>
+            <p className="text-3xl font-bold text-rose-700 tabular-nums mt-1">{kpis?.totalDevoluciones || 0}</p>
+            <p className="text-xs text-gray-400 mt-1">devoluciones registradas</p>
+          </div>
+          <div className="flex-1 bg-rose-50/60 rounded-xl p-4 border border-rose-100">
+            <p className="text-xs font-semibold uppercase tracking-wide text-rose-600">Monto Devuelto</p>
+            <p className="text-3xl font-bold text-rose-700 tabular-nums mt-1">{formatMoney(kpis?.montoDevuelto)}</p>
+            <p className="text-xs text-gray-400 mt-1">ya descontado de "Ventas Período"</p>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 };

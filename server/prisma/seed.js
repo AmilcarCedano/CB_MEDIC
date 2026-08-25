@@ -4,17 +4,20 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
-  const farmacia = await prisma.farmacia.upsert({
-    where: { ruc: '20541234567' },
-    update: {},
-    create: {
-      nombre: 'Farmacia Central - Trujillo',
-      ruc: '20541234567',
-      direccion: 'Av. Espana 100',
-      telefono: '999999999',
-      email: 'central@cbmedic.pe',
-    },
-  });
+  // ruc ya no es único (una farmacia puede compartir RUC con otra), así que
+  // no se puede usar como clave de upsert: se busca primero y se crea si falta.
+  let farmacia = await prisma.farmacia.findFirst({ where: { ruc: '20541234567' } });
+  if (!farmacia) {
+    farmacia = await prisma.farmacia.create({
+      data: {
+        nombre: 'Farmacia Central - Trujillo',
+        ruc: '20541234567',
+        direccion: 'Av. Espana 100',
+        telefono: '999999999',
+        email: 'central@cbmedic.pe',
+      },
+    });
+  }
 
   const adminPlain = 'adminPass';
   const adminPass = await bcrypt.hash(adminPlain, 10);

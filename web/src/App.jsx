@@ -62,6 +62,15 @@ export default function App() {
     window.localStorage.removeItem(SOURCE_KEY);
   };
 
+  // Si el interceptor de axios detecta un 401 (token inválido/expirado) en
+  // cualquier request, cerramos sesión sola en vez de dejar un error crudo
+  // en pantalla — ver interceptor de respuesta en lib/api.js.
+  useEffect(() => {
+    const handleSessionExpired = () => handleLogout();
+    window.addEventListener("cb:session-expired", handleSessionExpired);
+    return () => window.removeEventListener("cb:session-expired", handleSessionExpired);
+  }, []);
+
   const hasAccessToAdmin = session?.user?.role === "ADMIN" || session?.user?.role === "VENDEDOR";
   
   if (!bootstrapped || !minSplashDone) {

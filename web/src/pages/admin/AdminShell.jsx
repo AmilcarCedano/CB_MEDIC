@@ -25,6 +25,7 @@ import {
   Settings,
   Percent,
 } from "lucide-react";
+import useInactivityLogout from "../../hooks/useInactivityLogout.js";
 import GestionOtros from "./GestionOtros.jsx";
 // import ComprobantesServicios from "./ComprobantesServicios.jsx"; // Deprecated
 import { api } from "../../lib/api.js";
@@ -280,6 +281,9 @@ const Sidebar = ({ currentScreen, setCurrentScreen, context, onExit, isOpen, tog
 };
 
 export default function AdminShell({ session, onLogout }) {
+  // Cierra la sesión sola tras 30 min sin actividad (mouse, teclado, touch, scroll)
+  useInactivityLogout(onLogout);
+
   const isVendedor = session.user.role === 'VENDEDOR';
   const sessionFarmaciaId = session.user.farmacia?.id;
   const [currentScreen, setCurrentScreen] = useState(isVendedor ? "Cashier" : "GlobalDashboard");

@@ -1,4 +1,5 @@
 import axios from "axios";
+import { setSessionNotice } from "./sessionMessages.js";
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "",
@@ -35,6 +36,27 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Interceptor de respuesta: si el token quedó inválido o expiró (401) con una
+// sesión que ya estaba iniciada, cerramos sesión sola en vez de dejar que
+// cada pantalla muestre su propio error crudo. El login (que también puede
+// devolver 401 por credenciales incorrectas) queda excluido a propósito.
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    const requestUrl = error?.config?.url || '';
+    const isLoginRequest = requestUrl.includes('/auth/login');
+    const hadSession = !!localStorage.getItem('cb_token');
+
+    if (status === 401 && !isLoginRequest && hadSession) {
+      setSessionNotice('expired');
+      window.dispatchEvent(new CustomEvent('cb:session-expired'));
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 export function setAuthToken(token) {
   if (token) {

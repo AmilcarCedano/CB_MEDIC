@@ -4,6 +4,7 @@ const prisma = require('../lib/prisma');
 const { logAudit } = require('../lib/audit');
 const { DEFAULT_LOYALTY, getLoyaltyConfig } = require('../lib/loyalty');
 const { requireAdmin } = require('../middleware/auth');
+const { round2 } = require('../lib/money');
 
 // Helper para calcular totales (subtotal, igv, total)
 const calculateTotals = (cartItems, discountFromPoints = 0) => {
@@ -381,10 +382,10 @@ router.post('/', async (req, res) => {
         return sum + (itemPrice * itemQty);
       }, 0);
 
-      const discountFromPoints = Number(appliedPoints) * Number(valorPorPunto);
-      const total = Math.max(0, initialTotal - discountFromPoints);
-      const subtotalAfterDiscount = total / (1 + igvRate);
-      const igv = total - subtotalAfterDiscount;
+      const discountFromPoints = round2(Number(appliedPoints) * Number(valorPorPunto));
+      const total = round2(Math.max(0, initialTotal - discountFromPoints));
+      const subtotalAfterDiscount = round2(total / (1 + igvRate));
+      const igv = round2(total - subtotalAfterDiscount);
 
       if (metodoPago === 'Efectivo' && parsedMontoRecibido < total) {
         throw new Error('El monto recibido es menor que el total.');
@@ -458,9 +459,9 @@ router.post('/', async (req, res) => {
         if (item.type === 'PROMO') {
           for (const pi of item.promoItems) {
             const qty = pi.cantidad * item.quantity;
-            const lineTotal = parseFloat(pi.producto.precioVenta) * qty;
-            const lineSubtotal = lineTotal / (1 + igvRate);
-            const lineIgv = lineTotal - lineSubtotal;
+            const lineTotal = round2(parseFloat(pi.producto.precioVenta) * qty);
+            const lineSubtotal = round2(lineTotal / (1 + igvRate));
+            const lineIgv = round2(lineTotal - lineSubtotal);
             await tx.comprobanteitem.create({
               data: {
                 comprobanteId: newComprobante.id,
@@ -468,7 +469,7 @@ router.post('/', async (req, res) => {
                 codigo_producto: pi.producto.codigoBarras || 'PROMO',
                 descripcion: pi.producto.nombre,
                 cantidad: qty,
-                precio_unitario: parseFloat(pi.producto.precioVenta) / (1 + igvRate),
+                precio_unitario: round2(parseFloat(pi.producto.precioVenta) / (1 + igvRate)),
                 subtotal: lineSubtotal,
                 igv: lineIgv,
                 total: lineTotal,
@@ -479,10 +480,10 @@ router.post('/', async (req, res) => {
               data: { stockActual: { decrement: qty } },
             });
           }
-          const totalDescuento = item.descuentoPromo * item.quantity;
+          const totalDescuento = round2(item.descuentoPromo * item.quantity);
           if (totalDescuento > 0) {
-            const discSubtotal = totalDescuento / (1 + igvRate);
-            const discIgv = totalDescuento - discSubtotal;
+            const discSubtotal = round2(totalDescuento / (1 + igvRate));
+            const discIgv = round2(totalDescuento - discSubtotal);
             await tx.comprobanteitem.create({
               data: {
                 comprobanteId: newComprobante.id,
@@ -490,7 +491,7 @@ router.post('/', async (req, res) => {
                 codigo_producto: 'DESC-PROMO',
                 descripcion: `Descuento Promocional (${item.promoNombre})`,
                 cantidad: item.quantity,
-                precio_unitario: -(item.descuentoPromo / (1 + igvRate)),
+                precio_unitario: -round2(item.descuentoPromo / (1 + igvRate)),
                 subtotal: -discSubtotal,
                 igv: -discIgv,
                 total: -totalDescuento,
@@ -498,9 +499,9 @@ router.post('/', async (req, res) => {
             });
           }
         } else {
-          const itemTotal = item.precioUnitario * item.quantity;
-          const itemSubtotal = itemTotal / (1 + igvRate);
-          const itemIgv = itemTotal - itemSubtotal;
+          const itemTotal = round2(item.precioUnitario * item.quantity);
+          const itemSubtotal = round2(itemTotal / (1 + igvRate));
+          const itemIgv = round2(itemTotal - itemSubtotal);
 
           await tx.comprobanteitem.create({
             data: {
@@ -510,7 +511,7 @@ router.post('/', async (req, res) => {
               codigo_producto: item.codigo,
               descripcion: item.nombre,
               cantidad: item.quantity,
-              precio_unitario: item.precioUnitario / (1 + igvRate),
+              precio_unitario: round2(item.precioUnitario / (1 + igvRate)),
               subtotal: itemSubtotal,
               igv: itemIgv,
               total: itemTotal,
@@ -678,13 +679,16 @@ router.post('/return/:id', async (req, res) => {
           throw new Error(`Cantidad inválida para ${isService ? 'servicio' : 'producto'} ${targetId}`);
         }
 
-        // Incluir IGV proporcional: precio_unitario es base, el cliente pagó base + igv
-        const baseUnitario = parseFloat(comprobanteItem.precio_unitario);
-        const igvTotal = parseFloat(comprobanteItem.igv || 0);
-        const igvUnitario = comprobanteItem.cantidad > 0 ? igvTotal / comprobanteItem.cantidad : 0;
-        const precioConIgv = baseUnitario + igvUnitario;
-        const subtotal = precioConIgv * returnItem.cantidad;
-        totalDevuelto += subtotal;
+        // El monto devuelto se calcula proporcional al total ya cobrado en la línea
+        // (comprobanteItem.total), NO reconstruyendo precio base + IGV por unidad:
+        // reconstruir por unidad (igv/cantidad con decimales) arrastra céntimos de
+        // redondeo y una devolución total termina sin cuadrar con lo cobrado
+        // (bug real detectado: venta de S/15.00 devuelta como S/14.99).
+        const totalLinea = parseFloat(comprobanteItem.total);
+        const cantidadOriginal = comprobanteItem.cantidad;
+        const precioConIgv = round2(cantidadOriginal > 0 ? totalLinea / cantidadOriginal : 0);
+        const subtotal = round2(cantidadOriginal > 0 ? (totalLinea * returnItem.cantidad) / cantidadOriginal : 0);
+        totalDevuelto = round2(totalDevuelto + subtotal);
 
         itemsToReturn.push({
           productoId: isService ? null : targetId,

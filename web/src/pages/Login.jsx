@@ -1,18 +1,33 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
+import { consumeSessionNotice } from "../lib/sessionMessages.js";
 import LoadingScreen from "../components/LoadingScreen.jsx";
 import { Stethoscope, Lock, User, LogIn, AlertCircle, Building2, ShieldCheck, Activity } from "lucide-react";
+
+const SESSION_NOTICE_MESSAGES = {
+  inactivity: "Tu sesión se cerró automáticamente por inactividad. Vuelve a iniciar sesión.",
+  expired: "Tu sesión expiró. Vuelve a iniciar sesión para continuar.",
+};
 
 export default function Login({ onLogin }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null);
   const [logoLoadFailed, setLogoLoadFailed] = useState(false);
+
+  useEffect(() => {
+    const reason = consumeSessionNotice();
+    if (reason && SESSION_NOTICE_MESSAGES[reason]) {
+      setNotice(SESSION_NOTICE_MESSAGES[reason]);
+    }
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError(null);
+    setNotice(null);
     setIsSubmitting(true);
     // Tiempo mínimo de visualización del loader (solo en éxito) para que
     // la transición se aprecie también cuando la respuesta es instantánea.
@@ -160,6 +175,14 @@ export default function Login({ onLogin }) {
                   />
                 </div>
               </div>
+
+              {/* Aviso de sesión cerrada (inactividad / token expirado) */}
+              {notice && !error && (
+                <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl" role="status">
+                  <AlertCircle size={20} className="text-amber-500 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                  <p className="text-amber-700 text-sm leading-snug">{notice}</p>
+                </div>
+              )}
 
               {/* Error Message */}
               {error && (

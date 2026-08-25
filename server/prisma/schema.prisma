@@ -229,7 +229,7 @@ model etiqueta {
 model farmacia {
   id                   Int                   @id @default(autoincrement())
   nombre               String
-  ruc                  String?               @unique(map: "Farmacia_ruc_key")
+  ruc                  String?
   direccion            String?
   telefono             String?
   email                String?
