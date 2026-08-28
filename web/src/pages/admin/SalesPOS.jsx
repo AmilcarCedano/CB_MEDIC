@@ -1548,8 +1548,9 @@ export default function SalesPOS({ farmacia, user }) {
                     </div>
                 </div>
 
-                {/* 2. Carrito Compacto Fijo */}
-                <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-2 -mr-2">
+                {/* 2. Carrito + Sugerencias: única zona con scroll, para que el resumen/total siempre quede visible abajo */}
+                <div className="flex-1 min-h-0 overflow-y-auto pr-2 -mr-2">
+                <div className="space-y-3">
                     {
                         cart.length === 0 ? (
                             <div className="text-center p-6 text-gray-400">
@@ -1595,10 +1596,11 @@ export default function SalesPOS({ farmacia, user }) {
                             ))
                         )
                     }
-                </div >
+                </div>
 
                 {/* Panel de sugerencias inline */}
                 {renderSuggestionPanel()}
+                </div>
 
                 {/* 3. Resumen y TOTAL */}
                 <div className="pt-4 border-t mt-4">
