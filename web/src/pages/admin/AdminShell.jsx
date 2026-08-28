@@ -257,7 +257,7 @@ const Sidebar = ({ currentScreen, setCurrentScreen, context, onExit, isOpen, tog
             </Button>
           </div>
         )}
-        <nav className="flex-grow overflow-y-auto p-2">
+        <nav className="max-h-[65vh] overflow-y-auto p-2">
           {menuItems.map((item, index) => renderMenuItem(item, index))}
         </nav>
         <div className="p-2 border-t border-gray-800 space-y-1">
