@@ -1514,7 +1514,7 @@ export default function SalesPOS({ farmacia, user }) {
                 </div>
 
                 {/* 2. Carrito Compacto Fijo */}
-                < div className="flex-1 overflow-y-auto space-y-3 pr-2 -mr-2" >
+                <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-2 -mr-2">
                     {
                         cart.length === 0 ? (
                             <div className="text-center p-6 text-gray-400">
