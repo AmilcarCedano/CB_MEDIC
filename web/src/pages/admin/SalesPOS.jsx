@@ -5,6 +5,16 @@ import { generateTicketPDF } from '../../lib/pdfGenerator';
 
 // --- PLACEHOLDER UI COMPONENTS ---
 const Card = ({ children, className = '', onClick = null }) => <div onClick={onClick} className={`bg-white rounded-xl shadow-lg p-4 md:p-6 ${className}`}>{children}</div>;
+
+// Estado de vencimiento de un producto según el margen configurado (en meses).
+// Se usa tanto para el badge de la tarjeta como para ordenar la lista de productos.
+const getExpiryInfo = (fechaVencimiento, monthsMargin) => {
+    if (!fechaVencimiento) return { status: null, diffMonths: Infinity };
+    const diffMonths = (new Date(fechaVencimiento) - new Date()) / (1000 * 60 * 60 * 24 * 30.44);
+    if (diffMonths < 0) return { status: 'EXPIRED', diffMonths };
+    if (diffMonths <= monthsMargin) return { status: 'WARNING', diffMonths };
+    return { status: null, diffMonths };
+};
 const Button = ({ children, variant = 'primary', size = 'md', onClick, disabled = false, className = '' }) => (
     <button
         onClick={onClick}
@@ -454,16 +464,31 @@ export default function SalesPOS({ farmacia, user }) {
             items = aggregatedProducts;
         }
 
-        if (searchTerm.length < 2) return items;
-        const lowerTerm = searchTerm.toLowerCase();
-        return items.filter(p =>
-            p.nombre.toLowerCase().includes(lowerTerm) ||
-            p.codigoBarras?.includes(lowerTerm) ||
-            p.codigoSunat?.includes(lowerTerm) ||
-            p.descripcion?.toLowerCase().includes(lowerTerm) ||
-            p.principioActivo?.toLowerCase().includes(lowerTerm)
-        );
-    }, [searchTerm, products, servicios, promociones, activeTab]);
+        if (searchTerm.length >= 2) {
+            const lowerTerm = searchTerm.toLowerCase();
+            items = items.filter(p =>
+                p.nombre.toLowerCase().includes(lowerTerm) ||
+                p.codigoBarras?.includes(lowerTerm) ||
+                p.codigoSunat?.includes(lowerTerm) ||
+                p.descripcion?.toLowerCase().includes(lowerTerm) ||
+                p.principioActivo?.toLowerCase().includes(lowerTerm)
+            );
+        }
+
+        // Productos vencidos/próximos a vencer primero, para que la vendedora los note de inmediato
+        if (activeTab === 'productos') {
+            const monthsMargin = posConfig?.margenVencimientoMeses ?? 3;
+            items = [...items].sort((a, b) => {
+                const infoA = getExpiryInfo(a.fechaVencimiento, monthsMargin);
+                const infoB = getExpiryInfo(b.fechaVencimiento, monthsMargin);
+                const rankA = infoA.status ? infoA.diffMonths : Infinity;
+                const rankB = infoB.status ? infoB.diffMonths : Infinity;
+                return rankA - rankB;
+            });
+        }
+
+        return items;
+    }, [searchTerm, products, servicios, promociones, activeTab, posConfig]);
 
     // Auto-select on exact barcode scan
     useEffect(() => {
@@ -1360,13 +1385,9 @@ export default function SalesPOS({ farmacia, user }) {
                             const itemStock = item.stockActual ?? 0;
                             const isService = activeTab === 'servicios';
 
-                            let expiryBadge = null;
-                            if (!isService && item.fechaVencimiento) {
-                                const monthsMargin = posConfig?.margenVencimientoMeses ?? 3;
-                                const diffMonths = (new Date(item.fechaVencimiento) - new Date()) / (1000 * 60 * 60 * 24 * 30.44);
-                                if (diffMonths < 0) expiryBadge = 'EXPIRED';
-                                else if (diffMonths <= monthsMargin) expiryBadge = 'WARNING';
-                            }
+                            const expiryBadge = !isService
+                                ? getExpiryInfo(item.fechaVencimiento, posConfig?.margenVencimientoMeses ?? 3).status
+                                : null;
 
                             return (
                                 <Card
@@ -1426,7 +1447,7 @@ export default function SalesPOS({ farmacia, user }) {
     const renderSummaryAndCart = () => {
         const clientLabel = client.type_doc === 'RUC' ? 'Cliente (RUC)' : `Cliente (${documentType})`;
         return (
-            <Card className="sticky top-4 max-h-[85vh] flex flex-col p-4 pb-6">
+            <Card className="sticky top-4 max-h-[85vh] flex flex-col p-4">
 
                 {/* Indicador de Estado de Caja - Mejorado */}
                 {!loadingTurno && (
@@ -1623,7 +1644,7 @@ export default function SalesPOS({ farmacia, user }) {
                     </Button>
                     <Button
                         variant="outline"
-                        className="w-full mt-2"
+                        className="w-full mt-2 mb-4"
                         onClick={() => {
                             setCart([]);
                             setClient(MOCK_CLIENT);
