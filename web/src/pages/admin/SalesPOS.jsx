@@ -1360,6 +1360,14 @@ export default function SalesPOS({ farmacia, user }) {
                             const itemStock = item.stockActual ?? 0;
                             const isService = activeTab === 'servicios';
 
+                            let expiryBadge = null;
+                            if (!isService && item.fechaVencimiento) {
+                                const monthsMargin = posConfig?.margenVencimientoMeses ?? 3;
+                                const diffMonths = (new Date(item.fechaVencimiento) - new Date()) / (1000 * 60 * 60 * 24 * 30.44);
+                                if (diffMonths < 0) expiryBadge = 'EXPIRED';
+                                else if (diffMonths <= monthsMargin) expiryBadge = 'WARNING';
+                            }
+
                             return (
                                 <Card
                                     key={`list-${activeTab}-${item.id}-${idx}`}
@@ -1368,6 +1376,12 @@ export default function SalesPOS({ farmacia, user }) {
                                 >
                                     <div className="flex justify-between items-start mb-2 gap-2">
                                         <div className="flex-1 min-w-0">
+                                            {expiryBadge && (
+                                                <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full mb-1 ${expiryBadge === 'EXPIRED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                    <AlertTriangle size={9} />
+                                                    {expiryBadge === 'EXPIRED' ? 'VENCIDO' : 'PRÓX. A VENCER'}
+                                                </span>
+                                            )}
                                             <h4 className="font-bold text-gray-900 leading-tight min-h-[44px] break-words line-clamp-2" title={item.nombre}>
                                                 {item.nombre}
                                             </h4>
@@ -1412,7 +1426,7 @@ export default function SalesPOS({ farmacia, user }) {
     const renderSummaryAndCart = () => {
         const clientLabel = client.type_doc === 'RUC' ? 'Cliente (RUC)' : `Cliente (${documentType})`;
         return (
-            <Card className="sticky top-4 h-[85vh] md:h-full flex flex-col justify-between p-4">
+            <Card className="sticky top-4 max-h-[85vh] flex flex-col p-4">
 
                 {/* Indicador de Estado de Caja - Mejorado */}
                 {!loadingTurno && (
