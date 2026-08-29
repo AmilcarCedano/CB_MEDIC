@@ -284,6 +284,201 @@ router.post('/', async (req, res) => {
   }
 });
 
+// PUT /api/envios/:id - Editar un ingreso completo (agregar, editar o quitar líneas)
+// Vendedor: solo si el ingreso tiene menos de 24h. Admin: siempre.
+// Si el ingreso ya está APLICADO, cualquier línea con ventas o devoluciones registradas
+// queda bloqueada (no se puede editar ni quitar) — solo se puede corregir manualmente
+// desde Inventario. Todo cambio (agregado/editado/quitado) queda en la auditoría.
+router.put('/:id', async (req, res) => {
+  try {
+    const envioId = Number(req.params.id);
+    const farmaciaId = req.farmaciaId;
+    const userRole = req.userRole;
+    const userId = req.userId;
+    const { titulo, items } = req.body || {};
+
+    if (!envioId || !Array.isArray(items) || !items.length) {
+      return res.status(400).json({ error: 'Datos insuficientes para editar el ingreso' });
+    }
+
+    const envio = await prisma.envio.findUnique({ where: { id: envioId }, include: { envioitem: true } });
+    if (!envio) return res.status(404).json({ error: 'Ingreso no encontrado' });
+    if (envio.farmaciaId !== farmaciaId) return res.status(403).json({ error: 'No tienes acceso a este ingreso' });
+
+    if (userRole === 'VENDEDOR') {
+      const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      if (new Date(envio.createdAt) < hace24Horas) {
+        return res.status(403).json({ error: 'No puedes editar ingresos con más de 24 horas de antigüedad. Contacta al administrador.' });
+      }
+    }
+
+    // Detectar duplicados dentro de lo que se está guardando (mismo chequeo que confirm/applyDirect)
+    {
+      const seenKeys = new Map();
+      const duplicateNames = new Set();
+      for (const payload of items) {
+        const codigo = payload?.codigoBarras?.trim();
+        if (!codigo) continue;
+        const lote = payload?.lote?.trim() || '';
+        const venc = payload?.fechaVencimiento || '';
+        const key = `${codigo}|${lote}|${venc}`;
+        if (seenKeys.has(key)) duplicateNames.add(payload?.nombre || codigo);
+        seenKeys.set(key, true);
+      }
+      if (duplicateNames.size > 0) {
+        return res.status(400).json({
+          error: `Hay productos repetidos con el mismo código, lote y vencimiento: ${[...duplicateNames].join(', ')}. Corrige antes de guardar.`
+        });
+      }
+    }
+
+    const existingById = new Map(envio.envioitem.map((i) => [i.id, i]));
+    const submittedIds = new Set(items.filter((i) => i.id).map((i) => i.id));
+    const toRemove = envio.envioitem.filter((i) => !submittedIds.has(i.id));
+
+    try {
+      const cache = new Map();
+      const result = await prisma.$transaction(async (tx) => {
+        const changes = { agregados: [], editados: [], quitados: [] };
+
+        // 1. Quitar líneas que ya no están en la lista enviada
+        for (const item of toRemove) {
+          if (envio.estado === 'APLICADO' && item.productoId) {
+            const [ventas, devoluciones] = await Promise.all([
+              tx.comprobanteitem.count({ where: { productoId: item.productoId } }),
+              tx.devolucionitem.count({ where: { productoId: item.productoId } }),
+            ]);
+            if (ventas > 0 || devoluciones > 0) {
+              const e = new Error(`No se puede quitar "${item.payload?.nombre || 'este producto'}" porque ya tiene ventas o devoluciones registradas. Corrígelo manualmente desde Inventario.`);
+              e.httpStatus = 409;
+              throw e;
+            }
+            const stockToRevert = Number(item.payload?.stockActual) || 0;
+            await tx.producto.update({ where: { id: item.productoId }, data: { stockActual: { decrement: stockToRevert } } });
+          }
+          await tx.envioitem.delete({ where: { id: item.id } });
+          changes.quitados.push(item.payload?.nombre || `#${item.id}`);
+        }
+
+        // 2. Editar líneas existentes o crear las nuevas que se hayan agregado
+        for (const payload of items) {
+          const sanitized = sanitizePayload(payload);
+          const existingItem = payload.id ? existingById.get(payload.id) : null;
+
+          if (existingItem) {
+            const sinCambios = JSON.stringify(sanitizePayload(existingItem.payload)) === JSON.stringify(sanitized);
+            if (!sinCambios) {
+              if (envio.estado === 'APLICADO' && existingItem.productoId) {
+                const [ventas, devoluciones] = await Promise.all([
+                  tx.comprobanteitem.count({ where: { productoId: existingItem.productoId } }),
+                  tx.devolucionitem.count({ where: { productoId: existingItem.productoId } }),
+                ]);
+                if (ventas > 0 || devoluciones > 0) {
+                  const e = new Error(`No se puede editar "${sanitized.nombre}" porque ya tiene ventas o devoluciones registradas. Corrígelo manualmente desde Inventario.`);
+                  e.httpStatus = 409;
+                  throw e;
+                }
+                const producto = await tx.producto.findUnique({ where: { id: existingItem.productoId } });
+                if (producto) {
+                  const oldStock = Number(existingItem.payload?.stockActual) || 0;
+                  const delta = sanitized.stockActual - oldStock;
+                  const stockResultante = producto.stockActual + delta;
+                  if (stockResultante < 0) {
+                    const e = new Error(`La cantidad de "${sanitized.nombre}" dejaría el stock del producto en negativo.`);
+                    e.httpStatus = 400;
+                    throw e;
+                  }
+                  await loadCategoria(tx, envio.farmaciaId, sanitized.categoriaId, cache);
+                  await tx.producto.update({
+                    where: { id: producto.id },
+                    data: {
+                      stockActual: stockResultante,
+                      categoriaId: sanitized.categoriaId,
+                      codigoBarras: sanitized.codigoBarras || null,
+                      nombre: sanitized.nombre,
+                      descripcion: sanitized.descripcion || null,
+                      principioActivo: sanitized.principioActivo || null,
+                      concentracion: sanitized.concentracion || null,
+                      laboratorio: sanitized.laboratorio || null,
+                      presentacion: sanitized.presentacion || null,
+                      precioCosto: sanitized.precioCosto,
+                      precioVenta: sanitized.precioVenta,
+                      stockMinimo: sanitized.stockMinimo,
+                      lote: sanitized.lote || null,
+                      fechaVencimiento: sanitized.fechaVencimiento ? new Date(sanitized.fechaVencimiento) : null,
+                    },
+                  });
+                }
+              }
+              changes.editados.push(sanitized.nombre);
+            }
+            await tx.envioitem.update({ where: { id: existingItem.id }, data: { payload: sanitized } });
+          } else {
+            // Línea nueva agregada durante la edición
+            let productoId = null;
+            if (envio.estado === 'APLICADO') {
+              let existingProd = null;
+              if (sanitized.codigoBarras) {
+                existingProd = await tx.producto.findFirst({
+                  where: {
+                    farmaciaId: envio.farmaciaId,
+                    codigoBarras: sanitized.codigoBarras,
+                    lote: sanitized.lote || null,
+                    fechaVencimiento: sanitized.fechaVencimiento ? new Date(sanitized.fechaVencimiento) : null,
+                  },
+                });
+              }
+              if (existingProd) {
+                await tx.producto.update({ where: { id: existingProd.id }, data: { stockActual: { increment: sanitized.stockActual } } });
+                productoId = existingProd.id;
+              } else {
+                const productData = await buildProductData(tx, envio.farmaciaId, sanitized, cache);
+                const nuevo = await tx.producto.create({ data: productData });
+                productoId = nuevo.id;
+              }
+            }
+            await tx.envioitem.create({
+              data: {
+                envioId: envio.id,
+                productoId,
+                payload: sanitized,
+                appliedAt: envio.estado === 'APLICADO' ? new Date() : null,
+              },
+            });
+            changes.agregados.push(sanitized.nombre);
+          }
+        }
+
+        await tx.envio.update({
+          where: { id: envio.id },
+          data: { titulo: titulo?.trim() || envio.titulo, updatedAt: new Date() },
+        });
+
+        return changes;
+      });
+
+      logAudit({
+        farmaciaId,
+        usuarioId: userId,
+        accion: 'EDITAR',
+        modulo: 'INGRESOS',
+        descripcion: `Ingreso "${envio.titulo}" editado — agregados: ${result.agregados.join(', ') || 'ninguno'}; editados: ${result.editados.join(', ') || 'ninguno'}; quitados: ${result.quitados.join(', ') || 'ninguno'}`,
+        detalles: result,
+      });
+
+      const updatedEnvio = await prisma.envio.findUnique({ where: { id: envio.id }, include: { envioitem: true } });
+      return res.json({ ...updatedEnvio, items: updatedEnvio.envioitem });
+    } catch (err) {
+      const status = err.httpStatus || 500;
+      if (status === 500) console.error(err);
+      return res.status(status).json({ error: err.message || 'No se pudo editar el ingreso' });
+    }
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'No se pudo editar el ingreso' });
+  }
+});
+
 router.post('/:id/quote', async (req, res) => {
   try {
     const envioId = Number(req.params.id);

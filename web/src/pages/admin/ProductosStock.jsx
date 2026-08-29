@@ -21,7 +21,7 @@ const createEmptyForm = () => ({
   fechaVencimiento: "",
 });
 
-export default function ProductosStock({ farmacia, onBack }) {
+export default function ProductosStock({ farmacia, onBack, editingEnvio = null }) {
   const [categories, setCategories] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
@@ -113,9 +113,34 @@ export default function ProductosStock({ farmacia, onBack }) {
     fetchAutoLote();
   }, [farmacia?.id]);
 
-  // Al entrar, revisa si quedó un borrador local sin terminar (ej. se cortó el internet
-  // a mitad de armar un ingreso largo) antes de empezar a guardar encima.
+  // Modo edición: carga los productos del ingreso existente en la lista, para poder
+  // editar cualquier campo, quitar líneas o agregar más, y guardar todo junto.
   useEffect(() => {
+    if (!editingEnvio) return;
+    setShipmentTitle(editingEnvio.titulo || "");
+    setShipmentItems(editingEnvio.items.map((item) => ({
+      ...item.payload,
+      id: item.id,
+    })));
+  }, [editingEnvio?.id]);
+
+  // Rellena el nombre de categoría en pantalla una vez que las categorías terminan de cargar
+  useEffect(() => {
+    if (!editingEnvio || !categories.length) return;
+    setShipmentItems((prev) => prev.map((item) => (
+      item.categoriaNombre ? item : { ...item, categoriaNombre: categories.find((c) => c.id === item.categoriaId)?.nombre || "" }
+    )));
+  }, [categories, editingEnvio?.id]);
+
+  // Al entrar, revisa si quedó un borrador local sin terminar (ej. se cortó el internet
+  // a mitad de armar un ingreso largo) antes de empezar a guardar encima. No aplica en
+  // modo edición (ahí se está editando un ingreso ya existente, no armando uno nuevo).
+  useEffect(() => {
+    if (editingEnvio) {
+      setDraftResolved(false);
+      setPendingDraft(null);
+      return;
+    }
     setDraftResolved(false);
     setPendingDraft(null);
     if (!farmacia?.id) {
@@ -393,18 +418,27 @@ export default function ProductosStock({ farmacia, onBack }) {
     setSavingShipment(true);
     setFormError(null);
     try {
-      await api.post("/envios", {
-        farmaciaId: farmacia.id,
-        titulo: shipmentTitle.trim() || `Envío ${new Date().toLocaleDateString()}`,
-        // eslint-disable-next-line no-unused-vars -- se descarta categoriaNombre a propósito (no debe ir en el payload)
-        items: shipmentItems.map(({ categoriaNombre, ...item }) => ({
-          ...item,
-          fechaVencimiento: toNoonUTC(item.fechaVencimiento),
-        })),
-        applyDirect,
-      });
-      if (farmacia?.id) {
-        try { localStorage.removeItem(getDraftKey(farmacia.id)); } catch (err) { console.error(err); }
+      // eslint-disable-next-line no-unused-vars -- se descarta categoriaNombre a propósito (no debe ir en el payload)
+      const items = shipmentItems.map(({ categoriaNombre, ...item }) => ({
+        ...item,
+        fechaVencimiento: toNoonUTC(item.fechaVencimiento),
+      }));
+
+      if (editingEnvio) {
+        await api.put(`/envios/${editingEnvio.id}`, {
+          titulo: shipmentTitle.trim() || editingEnvio.titulo,
+          items,
+        });
+      } else {
+        await api.post("/envios", {
+          farmaciaId: farmacia.id,
+          titulo: shipmentTitle.trim() || `Envío ${new Date().toLocaleDateString()}`,
+          items,
+          applyDirect,
+        });
+        if (farmacia?.id) {
+          try { localStorage.removeItem(getDraftKey(farmacia.id)); } catch (err) { console.error(err); }
+        }
       }
       onBack(); // Go back to the list view
     } catch (err) {
@@ -427,12 +461,18 @@ export default function ProductosStock({ farmacia, onBack }) {
           <ArrowLeft size={20} />
         </Button>
         <div>
-          <h1 className="text-3xl font-extrabold text-gray-900">Nuevo Ingreso</h1>
-          <p className="text-gray-500">Añade productos a la lista para crear un nuevo ingreso para {farmacia?.nombre}</p>
+          <h1 className="text-3xl font-extrabold text-gray-900">
+            {editingEnvio ? `Editar Ingreso: ${editingEnvio.titulo}` : 'Nuevo Ingreso'}
+          </h1>
+          <p className="text-gray-500">
+            {editingEnvio
+              ? `Corrige cantidades, precios o vencimientos, quita líneas equivocadas o agrega productos que faltaron en "${editingEnvio.titulo}"${editingEnvio.estado === 'APLICADO' ? ' (ya aplicado al inventario)' : ''}.`
+              : `Añade productos a la lista para crear un nuevo ingreso para ${farmacia?.nombre}`}
+          </p>
         </div>
       </div>
 
-      {pendingDraft && (
+      {!editingEnvio && pendingDraft && (
         <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div>
             <p className="font-bold text-amber-800">Último ingreso pendiente sin guardar</p>
@@ -703,14 +743,23 @@ export default function ProductosStock({ farmacia, onBack }) {
 
         {shipmentItems.length > 0 && (
           <div className="flex justify-end gap-4 mt-6 pt-6 border-t">
-            <Button variant="secondary" onClick={() => handleSaveShipment(false)} disabled={savingShipment}>
-              <FileDown size={18} className="mr-2" />
-              {savingShipment ? 'Guardando...' : 'Guardar como pendiente'}
-            </Button>
-            <Button variant="success" onClick={() => handleSaveShipment(true)} disabled={savingShipment}>
-              <Save size={18} className="mr-2" />
-              {savingShipment ? 'Guardando...' : 'Guardar Directo'}
-            </Button>
+            {editingEnvio ? (
+              <Button variant="success" onClick={() => handleSaveShipment(false)} disabled={savingShipment}>
+                <Save size={18} className="mr-2" />
+                {savingShipment ? 'Guardando...' : 'Guardar Cambios'}
+              </Button>
+            ) : (
+              <>
+                <Button variant="secondary" onClick={() => handleSaveShipment(false)} disabled={savingShipment}>
+                  <FileDown size={18} className="mr-2" />
+                  {savingShipment ? 'Guardando...' : 'Guardar como pendiente'}
+                </Button>
+                <Button variant="success" onClick={() => handleSaveShipment(true)} disabled={savingShipment}>
+                  <Save size={18} className="mr-2" />
+                  {savingShipment ? 'Guardando...' : 'Guardar Directo'}
+                </Button>
+              </>
+            )}
           </div>
         )}
       </Card>

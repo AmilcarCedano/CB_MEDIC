@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
 import { Card, Button, Input, Modal } from './components/ui';
-import { Plus, ArrowLeft, Eye, FileText, CheckCircle, Trash2, Clock, AlertTriangle, Pencil, Check, X } from 'lucide-react';
+import { Plus, ArrowLeft, Eye, FileText, CheckCircle, Trash2, Clock, AlertTriangle, Pencil } from 'lucide-react';
 import ProductosStock from './ProductosStock';
 import { formatDateSafe } from '../../lib/dateUtils';
 
@@ -48,11 +48,7 @@ const Envios = ({ farmacia, user }) => {
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const [editTarget, setEditTarget] = useState(null);
-  const [editValues, setEditValues] = useState({});
-  const [editSavingId, setEditSavingId] = useState(null);
-  const [editDeletingId, setEditDeletingId] = useState(null);
-  const [editError, setEditError] = useState(null);
+  const [editingEnvio, setEditingEnvio] = useState(null);
 
   const fetchEnvios = async () => {
     setLoading(true);
@@ -123,58 +119,18 @@ const Envios = ({ farmacia, user }) => {
   };
 
   const openEdit = (envio) => {
-    setEditTarget(envio);
-    setEditError(null);
-    const initial = {};
-    envio.items.forEach((item) => { initial[item.id] = String(item.payload?.stockActual ?? 0); });
-    setEditValues(initial);
-  };
-
-  const closeEdit = () => {
-    setEditTarget(null);
-    setEditValues({});
-    setEditError(null);
-  };
-
-  const handleSaveItemQuantity = async (item) => {
-    setEditError(null);
-    const newStock = Number(editValues[item.id]);
-    if (!Number.isFinite(newStock) || newStock < 0) {
-      setEditError("Ingresa una cantidad válida (0 o más).");
-      return;
-    }
-    setEditSavingId(item.id);
-    try {
-      await api.put(`/envios/${editTarget.id}/items/${item.id}`, { stockActual: newStock });
-      setEditTarget((prev) => prev ? {
-        ...prev,
-        items: prev.items.map((i) => i.id === item.id ? { ...i, payload: { ...i.payload, stockActual: newStock } } : i),
-      } : prev);
-      fetchEnvios();
-    } catch (err) {
-      setEditError(err?.response?.data?.error || "No se pudo guardar la cantidad.");
-    } finally {
-      setEditSavingId(null);
-    }
-  };
-
-  const handleDeleteItemLine = async (item) => {
-    if (!window.confirm(`¿Quitar "${item.payload?.nombre || 'este producto'}" de este ingreso?`)) return;
-    setEditError(null);
-    setEditDeletingId(item.id);
-    try {
-      await api.delete(`/envios/${editTarget.id}/items/${item.id}`);
-      setEditTarget((prev) => prev ? { ...prev, items: prev.items.filter((i) => i.id !== item.id) } : prev);
-      fetchEnvios();
-    } catch (err) {
-      setEditError(err?.response?.data?.error || "No se pudo quitar el producto.");
-    } finally {
-      setEditDeletingId(null);
-    }
+    setEditingEnvio(envio);
+    setView('new');
   };
 
   if (view === 'new') {
-    return <ProductosStock farmacia={farmacia} onBack={() => setView('list')} />;
+    return (
+      <ProductosStock
+        farmacia={farmacia}
+        editingEnvio={editingEnvio}
+        onBack={() => { setEditingEnvio(null); setView('list'); }}
+      />
+    );
   }
 
   if (view === 'details' && selectedEnvio) {
@@ -343,7 +299,7 @@ const Envios = ({ farmacia, user }) => {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-900">Gestión de Ingresos</h2>
-        <Button onClick={() => setView('new')}>
+        <Button onClick={() => { setEditingEnvio(null); setView('new'); }}>
           <Plus className="mr-2" size={18} />
           Registrar Nuevo Ingreso
         </Button>
@@ -506,62 +462,6 @@ const Envios = ({ farmacia, user }) => {
         </Modal>
       )}
 
-      {editTarget && (
-        <Modal
-          isOpen={!!editTarget}
-          onClose={closeEdit}
-          title={`Editar Ingreso: ${editTarget.titulo}`}
-        >
-          <div className="space-y-4">
-            {editTarget.estado === 'APLICADO' && (
-              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                Este ingreso ya está aplicado al inventario. Si cambias una cantidad, se suma o resta directo del stock actual. Si el producto ya tuvo una venta o devolución, no se podrá editar aquí — corrígelo manualmente desde Inventario.
-              </p>
-            )}
-            {editError && <p className="text-sm text-red-600 font-medium">{editError}</p>}
-            <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
-              {editTarget.items.map((item) => (
-                <div key={item.id} className="flex items-center gap-2 p-3 border rounded-lg">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900 truncate">{item.payload?.nombre || '-'}</p>
-                    {item.payload?.lote && <p className="text-xs text-gray-500">Lote: {item.payload.lote}</p>}
-                  </div>
-                  <input
-                    type="number"
-                    min="0"
-                    value={editValues[item.id] ?? ''}
-                    onChange={(e) => setEditValues((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                    className="w-24 border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
-                  />
-                  <Button
-                    variant="success"
-                    size="sm"
-                    onClick={() => handleSaveItemQuantity(item)}
-                    disabled={editSavingId === item.id || String(item.payload?.stockActual ?? 0) === String(editValues[item.id])}
-                    title="Guardar cantidad"
-                  >
-                    <Check size={16} />
-                  </Button>
-                  {editTarget.estado !== 'APLICADO' && (
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => handleDeleteItemLine(item)}
-                      disabled={editDeletingId === item.id || editTarget.items.length <= 1}
-                      title="Quitar esta línea del ingreso"
-                    >
-                      <X size={16} />
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-end">
-              <Button type="button" variant="secondary" onClick={closeEdit}>Cerrar</Button>
-            </div>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 };
