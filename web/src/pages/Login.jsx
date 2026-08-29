@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 import { consumeSessionNotice } from "../lib/sessionMessages.js";
 import LoadingScreen from "../components/LoadingScreen.jsx";
-import { Stethoscope, Lock, User, LogIn, AlertCircle, Building2, ShieldCheck, Activity } from "lucide-react";
+import { Stethoscope, Lock, User, LogIn, AlertCircle, Building2, ShieldCheck, Activity, Eye, EyeOff } from "lucide-react";
 
 const SESSION_NOTICE_MESSAGES = {
   inactivity: "Tu sesión se cerró automáticamente por inactividad. Vuelve a iniciar sesión.",
@@ -16,6 +16,7 @@ export default function Login({ onLogin }) {
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
   const [logoLoadFailed, setLogoLoadFailed] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     const reason = consumeSessionNotice();
@@ -164,15 +165,25 @@ export default function Login({ onLogin }) {
                   </div>
                   <input
                     id="login-password"
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Ingresa tu contraseña"
                     autoComplete="current-password"
                     disabled={isSubmitting}
                     required
-                    className="w-full min-h-[48px] pl-11 pr-4 py-3 bg-gray-50/80 border border-gray-200 rounded-2xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent focus:bg-white transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full min-h-[48px] pl-11 pr-11 py-3 bg-gray-50/80 border border-gray-200 rounded-2xl text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent focus:bg-white transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    disabled={isSubmitting}
+                    tabIndex={-1}
+                    aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-indigo-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {showPassword ? <EyeOff size={20} aria-hidden="true" /> : <Eye size={20} aria-hidden="true" />}
+                  </button>
                 </div>
               </div>
 

@@ -547,6 +547,176 @@ router.delete('/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// PUT /api/envios/:envioId/items/:itemId - Corregir la cantidad de una línea del ingreso
+// Vendedor: solo si el ingreso sigue pendiente (BORRADOR/COTIZADO) y tiene menos de 24h.
+// Admin: siempre, incluso si el ingreso ya fue APLICADO — pero se bloquea si ese producto
+// ya tuvo una venta o devolución desde que se aplicó (ahí se corrige manual desde Inventario).
+router.put('/:envioId/items/:itemId', async (req, res) => {
+  try {
+    const envioId = Number(req.params.envioId);
+    const itemId = Number(req.params.itemId);
+    const farmaciaId = req.farmaciaId;
+    const userRole = req.userRole;
+    const userId = req.userId;
+    const newStock = Number(req.body?.stockActual);
+
+    if (!envioId || !itemId) return res.status(400).json({ error: 'Ingreso o producto inválido' });
+    if (!Number.isFinite(newStock) || newStock < 0) {
+      return res.status(400).json({ error: 'La cantidad debe ser un número válido mayor o igual a 0' });
+    }
+
+    const envio = await prisma.envio.findUnique({ where: { id: envioId }, include: { envioitem: true } });
+    if (!envio) return res.status(404).json({ error: 'Ingreso no encontrado' });
+    if (envio.farmaciaId !== farmaciaId) return res.status(403).json({ error: 'No tienes acceso a este ingreso' });
+
+    const item = envio.envioitem.find((i) => i.id === itemId);
+    if (!item) return res.status(404).json({ error: 'Producto no encontrado en este ingreso' });
+
+    if (envio.estado === 'APLICADO') {
+      if (userRole === 'VENDEDOR') {
+        const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        if (new Date(envio.createdAt) < hace24Horas) {
+          return res.status(403).json({ error: 'No puedes editar ingresos con más de 24 horas de antigüedad. Contacta al administrador.' });
+        }
+      }
+      if (!item.productoId) {
+        return res.status(400).json({ error: 'Este producto no quedó vinculado a un registro de inventario; no se puede editar aquí' });
+      }
+
+      try {
+        const updatedItem = await prisma.$transaction(async (tx) => {
+          const [ventas, devoluciones] = await Promise.all([
+            tx.comprobanteitem.count({ where: { productoId: item.productoId } }),
+            tx.devolucionitem.count({ where: { productoId: item.productoId } }),
+          ]);
+          if (ventas > 0 || devoluciones > 0) {
+            const e = new Error('Ya se vendió o se registró una devolución de este producto desde que se aplicó el ingreso. Corrige la cantidad manualmente desde Inventario.');
+            e.httpStatus = 409;
+            throw e;
+          }
+
+          const producto = await tx.producto.findUnique({ where: { id: item.productoId } });
+          if (!producto) {
+            const e = new Error('El producto de esta línea ya no existe en el inventario');
+            e.httpStatus = 404;
+            throw e;
+          }
+
+          const oldStock = Number(item.payload?.stockActual) || 0;
+          const delta = newStock - oldStock;
+          const stockResultante = producto.stockActual + delta;
+          if (stockResultante < 0) {
+            const e = new Error('Esa cantidad dejaría el stock del producto en negativo');
+            e.httpStatus = 400;
+            throw e;
+          }
+
+          await tx.producto.update({ where: { id: producto.id }, data: { stockActual: stockResultante } });
+          return tx.envioitem.update({
+            where: { id: item.id },
+            data: { payload: { ...item.payload, stockActual: newStock } },
+          });
+        });
+
+        logAudit({
+          farmaciaId,
+          usuarioId: userId,
+          accion: 'EDITAR',
+          modulo: 'INGRESOS',
+          descripcion: `Cantidad corregida en ingreso aplicado "${envio.titulo}": ${item.payload?.nombre || ''} → ${newStock} unidades`,
+          detalles: { envioId, itemId, nuevoStock: newStock },
+        });
+
+        return res.json(updatedItem);
+      } catch (err) {
+        const status = err.httpStatus || 500;
+        if (status === 500) console.error(err);
+        return res.status(status).json({ error: err.message || 'No se pudo actualizar el producto' });
+      }
+    }
+
+    // BORRADOR / COTIZADO: todavía no impacta el stock real
+    if (userRole === 'VENDEDOR') {
+      const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      if (new Date(envio.createdAt) < hace24Horas) {
+        return res.status(403).json({ error: 'No puedes editar ingresos con más de 24 horas de antigüedad. Contacta al administrador.' });
+      }
+    }
+
+    const updatedItem = await prisma.envioitem.update({
+      where: { id: item.id },
+      data: { payload: { ...item.payload, stockActual: newStock } },
+    });
+
+    logAudit({
+      farmaciaId,
+      usuarioId: userId,
+      accion: 'EDITAR',
+      modulo: 'INGRESOS',
+      descripcion: `Cantidad corregida en ingreso pendiente "${envio.titulo}": ${item.payload?.nombre || ''} → ${newStock} unidades`,
+      detalles: { envioId, itemId, nuevoStock: newStock },
+    });
+
+    return res.json(updatedItem);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'No se pudo actualizar el producto' });
+  }
+});
+
+// DELETE /api/envios/:envioId/items/:itemId - Quitar una línea duplicada/incorrecta de un
+// ingreso que todavía no fue aplicado. Un ingreso ya APLICADO no permite quitar líneas aquí
+// (usar Eliminar Ingreso, que revierte todo, o corregir la cantidad).
+router.delete('/:envioId/items/:itemId', async (req, res) => {
+  try {
+    const envioId = Number(req.params.envioId);
+    const itemId = Number(req.params.itemId);
+    const farmaciaId = req.farmaciaId;
+    const userRole = req.userRole;
+    const userId = req.userId;
+
+    if (!envioId || !itemId) return res.status(400).json({ error: 'Ingreso o producto inválido' });
+
+    const envio = await prisma.envio.findUnique({ where: { id: envioId }, include: { envioitem: true } });
+    if (!envio) return res.status(404).json({ error: 'Ingreso no encontrado' });
+    if (envio.farmaciaId !== farmaciaId) return res.status(403).json({ error: 'No tienes acceso a este ingreso' });
+
+    if (envio.estado === 'APLICADO') {
+      return res.status(400).json({ error: 'No se puede quitar una línea de un ingreso ya aplicado. Usa Eliminar Ingreso o corrige la cantidad.' });
+    }
+
+    const item = envio.envioitem.find((i) => i.id === itemId);
+    if (!item) return res.status(404).json({ error: 'Producto no encontrado en este ingreso' });
+
+    if (userRole === 'VENDEDOR') {
+      const hace24Horas = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      if (new Date(envio.createdAt) < hace24Horas) {
+        return res.status(403).json({ error: 'No puedes editar ingresos con más de 24 horas de antigüedad. Contacta al administrador.' });
+      }
+    }
+
+    if (envio.envioitem.length <= 1) {
+      return res.status(400).json({ error: 'No puedes dejar el ingreso sin productos. Elimina el ingreso completo en su lugar.' });
+    }
+
+    await prisma.envioitem.delete({ where: { id: item.id } });
+
+    logAudit({
+      farmaciaId,
+      usuarioId: userId,
+      accion: 'ELIMINAR',
+      modulo: 'INGRESOS',
+      descripcion: `Línea quitada de ingreso pendiente "${envio.titulo}": ${item.payload?.nombre || ''}`,
+      detalles: { envioId, itemId },
+    });
+
+    return res.status(204).send();
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'No se pudo quitar el producto' });
+  }
+});
+
 // GET /api/envios/generate-lote - Generar siguiente número de lote
 router.get('/generate-lote', async (req, res) => {
   try {
