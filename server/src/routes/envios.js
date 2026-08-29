@@ -928,6 +928,8 @@ router.delete('/:envioId/items/:itemId', async (req, res) => {
 // GET /api/envios/generate-lote - Generar siguiente número de lote
 router.get('/generate-lote', async (req, res) => {
   try {
+    // Nunca cachear: es un generador de siguiente-número, cada llamada debe recalcularse.
+    res.set('Cache-Control', 'no-store');
     const farmaciaId = req.farmaciaId;
     if (!farmaciaId) return res.status(400).json({ error: 'Farmacia no identificada' });
     const lote = await generateLoteSerial(farmaciaId);
