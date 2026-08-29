@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Package, Plus, Search, ArrowLeft, Save, FileDown, Edit, AlertTriangle, Camera } from "lucide-react";
 import { api } from "../../lib/api.js";
 import { Card, Button, Input, Select, Modal } from "./components/ui.jsx";
@@ -47,6 +47,14 @@ export default function ProductosStock({ farmacia, onBack }) {
   const [formData, setFormData] = useState(createEmptyForm());
   const [scannerOpen, setScannerOpen] = useState(false);
   const [barcodeWarning, setBarcodeWarning] = useState(null);
+  const skipNextSearchRef = useRef(false);
+
+  // Borrador local (localStorage) para no perder la lista si se corta el internet
+  // o se recarga la página mientras se está armando un ingreso largo.
+  const [pendingDraft, setPendingDraft] = useState(null); // { items, titulo, savedAt } | null
+  const [draftResolved, setDraftResolved] = useState(false);
+  const [showDraftPreview, setShowDraftPreview] = useState(false);
+  const getDraftKey = (farmaciaId) => `cbmedic_ingreso_draft_${farmaciaId}`;
 
   const treatAsMedicamento = useMemo(() => {
     const cat = categories.find((c) => c.id === selectedCategoryId);
@@ -105,6 +113,67 @@ export default function ProductosStock({ farmacia, onBack }) {
     fetchAutoLote();
   }, [farmacia?.id]);
 
+  // Al entrar, revisa si quedó un borrador local sin terminar (ej. se cortó el internet
+  // a mitad de armar un ingreso largo) antes de empezar a guardar encima.
+  useEffect(() => {
+    setDraftResolved(false);
+    setPendingDraft(null);
+    if (!farmacia?.id) {
+      setDraftResolved(true);
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(getDraftKey(farmacia.id));
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.items?.length) {
+          setPendingDraft(parsed);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error("Error leyendo borrador local:", err);
+    }
+    setDraftResolved(true);
+  }, [farmacia?.id]);
+
+  // Mientras se arma la lista, la guarda en el navegador (una vez resuelto si había
+  // un borrador previo, para no pisarlo antes de que la vendedora decida qué hacer)
+  useEffect(() => {
+    if (!farmacia?.id || !draftResolved) return;
+    try {
+      if (shipmentItems.length > 0) {
+        localStorage.setItem(getDraftKey(farmacia.id), JSON.stringify({
+          items: shipmentItems,
+          titulo: shipmentTitle,
+          savedAt: Date.now(),
+        }));
+      } else {
+        localStorage.removeItem(getDraftKey(farmacia.id));
+      }
+    } catch (err) {
+      console.error("Error guardando borrador local:", err);
+    }
+  }, [shipmentItems, shipmentTitle, farmacia?.id, draftResolved]);
+
+  const handleContinueDraft = () => {
+    if (!pendingDraft) return;
+    setShipmentItems(pendingDraft.items);
+    setShipmentTitle(pendingDraft.titulo || "");
+    setPendingDraft(null);
+    setShowDraftPreview(false);
+    setDraftResolved(true);
+  };
+
+  const handleDiscardDraft = () => {
+    if (farmacia?.id) {
+      try { localStorage.removeItem(getDraftKey(farmacia.id)); } catch (err) { console.error(err); }
+    }
+    setPendingDraft(null);
+    setShowDraftPreview(false);
+    setDraftResolved(true);
+  };
+
   // Validar código de barras contra el servidor (debounced)
   useEffect(() => {
     const barcode = formData.codigoBarras?.trim();
@@ -138,6 +207,12 @@ export default function ProductosStock({ farmacia, onBack }) {
   }, [formData.codigoBarras, shipmentItems]);
 
   useEffect(() => {
+    // Evita re-buscar cuando searchTerm cambia porque se acaba de seleccionar una sugerencia
+    // (handleSuggestionSelect pone el nombre completo ahí solo para mostrarlo en el input).
+    if (skipNextSearchRef.current) {
+      skipNextSearchRef.current = false;
+      return;
+    }
     if (searchTerm.length < 3 || !treatAsMedicamento) {
       setSuggestions([]);
       return;
@@ -202,6 +277,7 @@ export default function ProductosStock({ farmacia, onBack }) {
       presentacion: producto.presentacion || "",
       descripcion: producto.formaFarmaceutica || "",
     }));
+    skipNextSearchRef.current = true;
     setSearchTerm(producto.nombre || "");
     setSuggestions([]);
   };
@@ -327,6 +403,9 @@ export default function ProductosStock({ farmacia, onBack }) {
         })),
         applyDirect,
       });
+      if (farmacia?.id) {
+        try { localStorage.removeItem(getDraftKey(farmacia.id)); } catch (err) { console.error(err); }
+      }
       onBack(); // Go back to the list view
     } catch (err) {
       const message = err?.response?.data?.error || "No se pudo registrar el envio.";
@@ -352,6 +431,52 @@ export default function ProductosStock({ farmacia, onBack }) {
           <p className="text-gray-500">Añade productos a la lista para crear un nuevo ingreso para {farmacia?.nombre}</p>
         </div>
       </div>
+
+      {pendingDraft && (
+        <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <p className="font-bold text-amber-800">Último ingreso pendiente sin guardar</p>
+            <p className="text-sm text-amber-700">
+              Tiene {pendingDraft.items.length} producto(s) guardados localmente
+              (del {new Date(pendingDraft.savedAt).toLocaleString('es-PE')}). Probablemente se cortó
+              el internet o se recargó la página antes de terminar.
+            </p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button type="button" variant="outline" size="sm" onClick={() => setShowDraftPreview(true)}>
+              Mirar
+            </Button>
+            <Button type="button" variant="primary" size="sm" onClick={handleContinueDraft}>
+              Seguir editando
+            </Button>
+            <Button type="button" variant="danger" size="sm" onClick={handleDiscardDraft}>
+              Borrar
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {showDraftPreview && pendingDraft && (
+        <Modal isOpen={showDraftPreview} onClose={() => setShowDraftPreview(false)} title="Último ingreso pendiente">
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500">
+              Guardado el {new Date(pendingDraft.savedAt).toLocaleString('es-PE')} — {pendingDraft.items.length} producto(s)
+            </p>
+            <div className="max-h-[50vh] overflow-y-auto space-y-2 pr-1">
+              {pendingDraft.items.map((item) => (
+                <div key={item.id} className="p-2 border rounded-lg flex justify-between text-sm">
+                  <span className="font-medium text-gray-900">{item.nombre}</span>
+                  <span className="text-gray-600">{item.stockActual} unid. · Lote {item.lote || '-'}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="secondary" onClick={() => setShowDraftPreview(false)}>Cerrar</Button>
+              <Button type="button" variant="primary" onClick={handleContinueDraft}>Seguir editando</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       <Card>
         <form className="space-y-6" onSubmit={handleAddItem}>
