@@ -154,6 +154,29 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Datos insuficientes para registrar productos' });
     }
 
+    // Misma validación que en /confirm: dos líneas con el mismo código+lote+vencimiento
+    // apuntan al mismo producto y rompen la restricción única de EnvioItem.productoId.
+    {
+      const seenKeys = new Map();
+      const duplicateNames = new Set();
+      for (const payload of items) {
+        const codigo = payload?.codigoBarras?.trim();
+        if (!codigo) continue;
+        const lote = payload?.lote?.trim() || '';
+        const venc = payload?.fechaVencimiento || '';
+        const key = `${codigo}|${lote}|${venc}`;
+        if (seenKeys.has(key)) {
+          duplicateNames.add(payload?.nombre || codigo);
+        }
+        seenKeys.set(key, true);
+      }
+      if (duplicateNames.size > 0) {
+        return res.status(400).json({
+          error: `Este ingreso tiene el mismo producto repetido dos veces con el mismo lote y vencimiento: ${[...duplicateNames].join(', ')}. Elimina o corrige la línea duplicada antes de continuar.`
+        });
+      }
+    }
+
     if (applyDirect) {
       const cache = new Map();
       const result = await prisma.$transaction(async (tx) => {
@@ -320,6 +343,28 @@ router.post('/:id/confirm', async (req, res) => {
 
     if (envio.estado !== 'BORRADOR') {
       return res.status(400).json({ error: 'El ingreso debe estar pendiente (borrador) antes de confirmar' });
+    }
+
+    // Detectar líneas duplicadas (mismo código de barras + lote + vencimiento) antes de
+    // aplicar. Dos líneas así terminan apuntando al mismo producto y rompen la restricción
+    // única de EnvioItem.productoId a mitad de transacción con un error críptico de BD.
+    const seenKeys = new Map();
+    const duplicateNames = new Set();
+    for (const item of envio.envioitem) {
+      const codigo = item.payload?.codigoBarras?.trim();
+      if (!codigo) continue; // sin código de barras no hay match automático, no puede colisionar
+      const lote = item.payload?.lote?.trim() || '';
+      const venc = item.payload?.fechaVencimiento || '';
+      const key = `${codigo}|${lote}|${venc}`;
+      if (seenKeys.has(key)) {
+        duplicateNames.add(item.payload?.nombre || codigo);
+      }
+      seenKeys.set(key, true);
+    }
+    if (duplicateNames.size > 0) {
+      return res.status(400).json({
+        error: `Este ingreso tiene el mismo producto repetido dos veces con el mismo lote y vencimiento: ${[...duplicateNames].join(', ')}. Elimina o corrige la línea duplicada antes de confirmar.`
+      });
     }
 
     const cache = new Map();

@@ -69,11 +69,32 @@ export default function ProductosStock({ farmacia, onBack }) {
     }
   };
 
-  // Auto-generar lote al montar
-  const fetchAutoLote = async () => {
+  // El backend genera el siguiente lote mirando solo los productos ya guardados en BD.
+  // Mientras se arma un ingreso con varios productos en la misma sesión, esos productos
+  // todavía no existen en BD (solo viven en shipmentItems), así que el backend devolvería
+  // siempre el mismo número. Por eso acá se evita repetir contra lotes ya usados localmente.
+  const bumpLoteIfTaken = (candidateLote, usedLotes) => {
+    if (!candidateLote || !usedLotes.has(candidateLote)) return candidateLote;
+    const match = candidateLote.match(/^(.*-)(\d+)$/);
+    if (!match) return candidateLote;
+    const [, prefix, numStr] = match;
+    const width = numStr.length;
+    let num = parseInt(numStr, 10);
+    let next = candidateLote;
+    while (usedLotes.has(next)) {
+      num += 1;
+      next = `${prefix}${String(num).padStart(width, '0')}`;
+    }
+    return next;
+  };
+
+  // Auto-generar lote al montar (o tras agregar un producto, pasando los lotes ya usados
+  // en esta sesión que todavía no llegaron a BD)
+  const fetchAutoLote = async (extraUsedLotes = []) => {
     try {
       const { data } = await api.get("/envios/generate-lote");
-      setFormData(prev => ({ ...prev, lote: data.lote }));
+      const usedLotes = new Set([...shipmentItems.map(i => i.lote).filter(Boolean), ...extraUsedLotes]);
+      setFormData(prev => ({ ...prev, lote: bumpLoteIfTaken(data.lote, usedLotes) }));
     } catch (err) {
       console.error("Error generando lote:", err);
     }
@@ -283,8 +304,8 @@ export default function ProductosStock({ farmacia, onBack }) {
     setSearchTerm("");
     setSuggestions([]);
     setBarcodeWarning(null);
-    // Generar nuevo lote para el siguiente producto
-    fetchAutoLote();
+    // Generar nuevo lote para el siguiente producto (evitando repetir el que se acaba de usar)
+    fetchAutoLote(lote ? [lote] : []);
   };
 
   const handleRemoveItem = (id) => {
