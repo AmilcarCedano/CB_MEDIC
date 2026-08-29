@@ -7,28 +7,41 @@ const { requireAdmin } = require('../middleware/auth');
 const ESTADOS = ['BORRADOR', 'COTIZADO', 'APLICADO'];
 
 // Genera un número de lote en formato: LOT-YYYYMMDD-NNN
+// Mira tanto los productos ya aplicados (tabla producto) como los ingresos que todavía
+// están pendientes (BORRADOR/COTIZADO) de esta farmacia — esos lotes ya están "usados"
+// aunque no hayan llegado a producto todavía, así que si no se revisan aquí, abrir
+// "Registrar Nuevo Ingreso" en una sesión nueva podía repetir el mismo número que un
+// ingreso guardado como pendiente minutos u horas antes.
 const generateLoteSerial = async (farmaciaId) => {
   const today = new Date();
   const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
   const prefix = `LOT-${dateStr}-`;
-  
-  // Buscar el último lote con este prefijo
-  const lastProduct = await prisma.producto.findFirst({
-    where: {
-      farmaciaId,
-      lote: { startsWith: prefix }
-    },
-    orderBy: { lote: 'desc' }
-  });
-  
-  let nextNum = 1;
-  if (lastProduct?.lote) {
-    const parts = lastProduct.lote.split('-');
-    const lastNum = parseInt(parts[parts.length - 1], 10);
-    if (!isNaN(lastNum)) nextNum = lastNum + 1;
+
+  const extractNum = (lote) => {
+    if (typeof lote !== 'string' || !lote.startsWith(prefix)) return null;
+    const parts = lote.split('-');
+    const n = parseInt(parts[parts.length - 1], 10);
+    return isNaN(n) ? null : n;
+  };
+
+  const [lastProduct, itemsPendientes] = await Promise.all([
+    prisma.producto.findFirst({
+      where: { farmaciaId, lote: { startsWith: prefix } },
+      orderBy: { lote: 'desc' },
+    }),
+    prisma.envioitem.findMany({
+      where: { envio: { farmaciaId, estado: { in: ['BORRADOR', 'COTIZADO'] } } },
+      select: { payload: true },
+    }),
+  ]);
+
+  let maxNum = extractNum(lastProduct?.lote) || 0;
+  for (const item of itemsPendientes) {
+    const n = extractNum(item.payload?.lote);
+    if (n !== null && n > maxNum) maxNum = n;
   }
-  
-  return `${prefix}${String(nextNum).padStart(3, '0')}`;
+
+  return `${prefix}${String(maxNum + 1).padStart(3, '0')}`;
 };
 
 const sanitizePayload = (payload = {}) => ({
