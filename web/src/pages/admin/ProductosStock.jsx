@@ -68,7 +68,10 @@ export default function ProductosStock({ farmacia, onBack, editingEnvio = null }
       const { data } = await api.get("/categories", { params: { farmaciaId: farmacia.id } });
       setCategories(data);
       if (data.length > 0) {
-        setSelectedCategoryId(data[0].id);
+        // Preferir "Medicamentos" como categoría por defecto (así se muestran lote/vencimiento
+        // de una vez), sin depender del orden en que se hayan creado las categorías de la farmacia.
+        const medicamentos = data.find((c) => c.nombre.toLowerCase().includes("medic"));
+        setSelectedCategoryId((medicamentos || data[0]).id);
       }
     } catch (err) {
       console.error(err);
