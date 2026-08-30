@@ -7,27 +7,26 @@ const { requireAdmin } = require('../middleware/auth');
 const ESTADOS = ['BORRADOR', 'COTIZADO', 'APLICADO'];
 
 // Genera un número de lote en formato: LOT-YYYYMMDD-NNN
-// Mira tanto los productos ya aplicados (tabla producto) como los ingresos que todavía
-// están pendientes (BORRADOR/COTIZADO) de esta farmacia — esos lotes ya están "usados"
-// aunque no hayan llegado a producto todavía, así que si no se revisan aquí, abrir
-// "Registrar Nuevo Ingreso" en una sesión nueva podía repetir el mismo número que un
-// ingreso guardado como pendiente minutos u horas antes.
+// El NNN es una numeración continua por farmacia que nunca reinicia (el 30/8 sigue desde
+// donde quedó el 29/8, etc.) — solo la fecha del prefijo cambia para reflejar el día en
+// que se creó ese lote. Revisa tanto los productos ya aplicados (tabla producto) como los
+// ingresos todavía pendientes (BORRADOR/COTIZADO), de cualquier fecha, de esta farmacia.
 const generateLoteSerial = async (farmaciaId) => {
   const today = new Date();
   const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
   const prefix = `LOT-${dateStr}-`;
 
+  const LOTE_PATTERN = /^LOT-\d{8}-(\d+)$/;
   const extractNum = (lote) => {
-    if (typeof lote !== 'string' || !lote.startsWith(prefix)) return null;
-    const parts = lote.split('-');
-    const n = parseInt(parts[parts.length - 1], 10);
-    return isNaN(n) ? null : n;
+    if (typeof lote !== 'string') return null;
+    const m = lote.match(LOTE_PATTERN);
+    return m ? parseInt(m[1], 10) : null;
   };
 
-  const [lastProduct, itemsPendientes] = await Promise.all([
-    prisma.producto.findFirst({
-      where: { farmaciaId, lote: { startsWith: prefix } },
-      orderBy: { lote: 'desc' },
+  const [productos, itemsPendientes] = await Promise.all([
+    prisma.producto.findMany({
+      where: { farmaciaId, lote: { startsWith: 'LOT-' } },
+      select: { lote: true },
     }),
     prisma.envioitem.findMany({
       where: { envio: { farmaciaId, estado: { in: ['BORRADOR', 'COTIZADO'] } } },
@@ -35,7 +34,11 @@ const generateLoteSerial = async (farmaciaId) => {
     }),
   ]);
 
-  let maxNum = extractNum(lastProduct?.lote) || 0;
+  let maxNum = 0;
+  for (const p of productos) {
+    const n = extractNum(p.lote);
+    if (n !== null && n > maxNum) maxNum = n;
+  }
   for (const item of itemsPendientes) {
     const n = extractNum(item.payload?.lote);
     if (n !== null && n > maxNum) maxNum = n;
