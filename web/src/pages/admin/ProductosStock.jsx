@@ -111,7 +111,9 @@ export default function ProductosStock({ farmacia, onBack, editingEnvio = null }
   // en esta sesión que todavía no llegaron a BD)
   const fetchAutoLote = async (extraUsedLotes = []) => {
     try {
-      const { data } = await api.get("/envios/generate-lote");
+      // Parámetro con timestamp para que el navegador nunca sirva una respuesta vieja
+      // de caché (aunque la haya guardado antes de que el backend mandara no-store).
+      const { data } = await api.get("/envios/generate-lote", { params: { _t: Date.now() } });
       const usedLotes = new Set([...shipmentItems.map(i => i.lote).filter(Boolean), ...extraUsedLotes]);
       setFormData(prev => ({ ...prev, lote: bumpLoteIfTaken(data.lote, usedLotes) }));
     } catch (err) {
@@ -324,7 +326,7 @@ export default function ProductosStock({ farmacia, onBack, editingEnvio = null }
     setLocalSearchTerm("");
     setLocalSuggestions([]);
     // Auto-generar lote para el quick add
-    api.get("/envios/generate-lote").then(({ data }) => {
+    api.get("/envios/generate-lote", { params: { _t: Date.now() } }).then(({ data }) => {
       setQuickAddForm(prev => ({ ...prev, lote: data.lote }));
     }).catch(() => {});
   };
