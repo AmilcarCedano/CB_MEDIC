@@ -61,6 +61,14 @@ export default function ProductosStock({ farmacia, onBack, editingEnvio = null }
     return cat ? cat.nombre.toLowerCase().includes("medic") : false;
   }, [categories, selectedCategoryId]);
 
+  // "Medicamentos" siempre primero en la lista visible, sin importar el orden real de
+  // creación de las categorías de la farmacia (que es como las devuelve la API).
+  const sortedCategories = useMemo(() => {
+    const medicamentos = categories.filter((c) => c.nombre.toLowerCase().includes("medic"));
+    const resto = categories.filter((c) => !c.nombre.toLowerCase().includes("medic"));
+    return [...medicamentos, ...resto];
+  }, [categories]);
+
   const fetchCategories = async () => {
     if (!farmacia?.id) return;
     setLoadingCategories(true);
@@ -538,7 +546,7 @@ export default function ProductosStock({ farmacia, onBack, editingEnvio = null }
               onChange={(e) => setSelectedCategoryId(Number(e.target.value))}
               disabled={loadingCategories}
             >
-              {categories.map((cat) => (
+              {sortedCategories.map((cat) => (
                 <option key={cat.id} value={cat.id}>
                   {cat.nombre}
                 </option>
