@@ -1446,7 +1446,7 @@ export default function SalesPOS({ farmacia, user }) {
     const renderSummaryAndCart = () => {
         const clientLabel = client.type_doc === 'RUC' ? 'Cliente (RUC)' : `Cliente (${documentType})`;
         return (
-            <Card className="sticky top-4 max-h-[85vh] flex flex-col p-4">
+            <Card className="sticky top-4 flex flex-col p-4">
 
                 {/* Indicador de Estado de Caja - Mejorado */}
                 {!loadingTurno && (
@@ -1548,7 +1548,7 @@ export default function SalesPOS({ farmacia, user }) {
                 </div>
 
                 {/* 2. Carrito + Sugerencias: única zona con scroll, para que el resumen/total siempre quede visible abajo */}
-                <div className="flex-1 min-h-[180px] overflow-y-auto pr-2 -mr-2">
+                <div className="max-h-[45vh] min-h-[100px] overflow-y-auto pr-2 -mr-2">
                 <div className="space-y-3">
                     {
                         cart.length === 0 ? (
