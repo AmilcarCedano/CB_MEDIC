@@ -308,13 +308,22 @@ router.post('/', async (req, res) => {
           throw new Error(`Stock insuficiente para ${dbProduct.nombre}. Disponible: ${availableStock}, Solicitado: ${item.quantity}`);
         }
         stockMap.set(dbProduct.id, availableStock - item.quantity);
+
+        // Precio: por defecto el de catálogo. El cajero puede subirlo desde el carrito
+        // (nunca bajarlo) — se revalida acá, no se confía en lo que mande el cliente.
+        const precioBaseProducto = parseFloat(dbProduct.precioVenta);
+        const precioSolicitadoProducto = Number(item.precioUnitario);
+        const precioFinalProducto = Number.isFinite(precioSolicitadoProducto) && precioSolicitadoProducto > precioBaseProducto
+          ? precioSolicitadoProducto
+          : precioBaseProducto;
+
         processedItems.push({
           ...item,
           type: 'PRODUCT',
           dbId: dbProduct.id,
           nombre: dbProduct.nombre,
           codigo: dbProduct.codigoBarras,
-          precioUnitario: parseFloat(dbProduct.precioVenta),
+          precioUnitario: precioFinalProducto,
           quantity: item.quantity
         });
       }
@@ -324,17 +333,21 @@ router.post('/', async (req, res) => {
         const dbService = servicesInDb.find(s => s.id === item.productId);
         if (!dbService) throw new Error(`Servicio con ID ${item.productId} no encontrado.`);
 
-        // Solo si el servicio está marcado como "permiteEditar" se acepta el
-        // nombre/precio que mandó el carrito - para el resto SIEMPRE se usa
-        // lo que dice la ficha del servicio, sin importar qué mande el cliente.
+        // Nombre: solo si el servicio está marcado "permiteEditar" se acepta el nombre
+        // personalizado que mandó el carrito — para el resto SIEMPRE se usa el de la ficha.
         let nombreFinal = dbService.nombre;
-        let precioFinal = parseFloat(dbService.precioVenta);
         if (dbService.permiteEditar) {
           const nombrePersonalizado = typeof item.nombrePersonalizado === 'string' ? item.nombrePersonalizado.trim() : '';
-          const precioPersonalizado = Number(item.precioUnitario);
           if (nombrePersonalizado) nombreFinal = nombrePersonalizado.slice(0, 200);
-          if (Number.isFinite(precioPersonalizado) && precioPersonalizado > 0) precioFinal = precioPersonalizado;
         }
+
+        // Precio: el cajero siempre puede subirlo desde el carrito (nunca bajarlo del
+        // establecido en la ficha), tenga o no marcado "permiteEditar" — se revalida acá.
+        const precioBaseServicio = parseFloat(dbService.precioVenta);
+        const precioSolicitadoServicio = Number(item.precioUnitario);
+        const precioFinal = Number.isFinite(precioSolicitadoServicio) && precioSolicitadoServicio > precioBaseServicio
+          ? precioSolicitadoServicio
+          : precioBaseServicio;
 
         processedItems.push({
           ...item,

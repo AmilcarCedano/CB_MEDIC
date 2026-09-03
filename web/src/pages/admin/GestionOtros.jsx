@@ -356,9 +356,9 @@ export default function GestionOtros({ farmacia, user }) {
                             onChange={(e) => setFormData({ ...formData, permiteEditar: e.target.checked })}
                         />
                         <span className="text-sm text-amber-800">
-                            <span className="font-bold">Permitir editar nombre y precio al vender</span>
+                            <span className="font-bold">Permitir editar nombre al vender</span>
                             <br />
-                            El nombre y precio de arriba quedan solo como valores por defecto. En el punto de venta, quien cobre podrá escribir un nombre y precio distintos cada vez, y eso es lo que saldrá en la factura. Útil para servicios variables (ej. "Otros" / "Varios").
+                            El nombre de arriba queda solo como valor por defecto. En el punto de venta, quien cobre podrá escribir un nombre distinto cada vez, y ese es el que sale en la factura. Útil para servicios variables (ej. "Otros" / "Varios"). El precio siempre se puede aumentar al vender (nunca bajar del establecido aquí), tenga o no marcada esta opción.
                         </span>
                     </label>
                     <div className="flex justify-end gap-3 pt-4">

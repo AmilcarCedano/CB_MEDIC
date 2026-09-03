@@ -1003,9 +1003,12 @@ export default function SalesPOS({ farmacia, user }) {
                     productId: item.tipo === 'promo' ? item.promoId : Number(item.id),
                     quantity: Number(item.quantity),
                     type: item.tipo === 'servicio' ? 'SERVICE' : (item.tipo === 'promo' ? 'PROMO' : 'PRODUCT'),
-                    // Solo tiene efecto si el servicio está marcado como "permiteEditar"
-                    // en su ficha - el backend vuelve a validar eso, no confía en esto.
-                    ...(item.tipo === 'servicio' ? { nombrePersonalizado: item.nombre, precioUnitario: item.price } : {}),
+                    // El backend vuelve a validar el precio contra el de catálogo (solo
+                    // permite subirlo, nunca bajarlo) — no confía en lo que mande el cliente.
+                    ...(item.tipo !== 'promo' ? { precioUnitario: item.price } : {}),
+                    // El nombre personalizado solo tiene efecto si el servicio está
+                    // marcado "permiteEditar" en su ficha; el backend lo revalida.
+                    ...(item.tipo === 'servicio' ? { nombrePersonalizado: item.nombre } : {}),
                 })),
                 clienteId: !client || client.id === 0 ? null : client.id,
                 metodoPago: paymentMethod,
@@ -1563,11 +1566,11 @@ export default function SalesPOS({ farmacia, user }) {
                                         <p className="font-bold text-sm text-gray-900 leading-tight truncate" title={item.nombre}>{item.nombre}</p>
                                         <div className="flex items-center gap-2 mt-0.5">
                                             <p className="text-[10px] text-gray-500 font-medium">S/ {item.price.toFixed(2)} / ud.</p>
-                                            {(item.tipo === 'producto' || (item.tipo === 'servicio' && item.permiteEditar)) && (
+                                            {(item.tipo === 'producto' || item.tipo === 'servicio') && (
                                                 <button
                                                     onClick={() => { setEditingPriceItem(item); setNewPriceValue(item.price.toString()); setNewNameValue(item.nombre); }}
                                                     className="px-1.5 py-0.5 flex items-center gap-1 text-[9px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md border border-indigo-100 transition-colors"
-                                                    title={item.tipo === 'servicio' ? 'Editar nombre y precio' : 'Aumentar precio'}
+                                                    title={item.tipo === 'servicio' && item.permiteEditar ? 'Editar nombre y aumentar precio' : 'Aumentar precio'}
                                                 >
                                                     <Edit size={10} /> EDITAR
                                                 </button>
@@ -2054,11 +2057,11 @@ export default function SalesPOS({ farmacia, user }) {
 
             <Modal
                 isOpen={!!editingPriceItem}
-                title={editingPriceItem?.tipo === 'servicio' ? 'Editar Servicio' : 'Aumentar Precio de Producto'}
+                title={editingPriceItem?.tipo === 'servicio' && editingPriceItem?.permiteEditar ? 'Editar Servicio' : 'Aumentar Precio'}
                 onClose={() => setEditingPriceItem(null)}
             >
                 <div className="space-y-4">
-                    {editingPriceItem?.tipo === 'servicio' ? (
+                    {editingPriceItem?.tipo === 'servicio' && editingPriceItem?.permiteEditar ? (
                         <>
                             <p className="text-sm text-gray-600">
                                 Este servicio permite escribir el nombre que se va a facturar en esta venta.
