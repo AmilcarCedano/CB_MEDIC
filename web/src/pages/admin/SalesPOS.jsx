@@ -1548,7 +1548,7 @@ export default function SalesPOS({ farmacia, user }) {
                 </div>
 
                 {/* 2. Carrito + Sugerencias: única zona con scroll, para que el resumen/total siempre quede visible abajo */}
-                <div className="flex-1 min-h-0 overflow-y-auto pr-2 -mr-2">
+                <div className="flex-1 min-h-[180px] overflow-y-auto pr-2 -mr-2">
                 <div className="space-y-3">
                     {
                         cart.length === 0 ? (

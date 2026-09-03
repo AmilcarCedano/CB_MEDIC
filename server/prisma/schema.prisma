@@ -469,6 +469,21 @@ model auditoria {
   @@index([modulo], map: "Auditoria_modulo_idx")
 }
 
+// Errores técnicos del servidor (excepciones, promesas rechazadas, console.error
+// de cualquier ruta). A diferencia de auditoria (acciones de negocio), esto vive
+// aparte porque el contenedor se recrea en cada deploy y docker logs se pierde con
+// él — esta tabla es lo único que sobrevive para revisar errores intermitentes.
+model errorlog {
+  id        Int      @id @default(autoincrement())
+  mensaje   String   @db.Text
+  stack     String?  @db.Text
+  ruta      String?  @db.VarChar(255)
+  metodo    String?  @db.VarChar(10)
+  fecha     DateTime @default(now())
+
+  @@index([fecha], map: "ErrorLog_fecha_idx")
+}
+
 model categoriaservicio {
   id         Int        @id @default(autoincrement())
   nombre     String     @db.VarChar(100)

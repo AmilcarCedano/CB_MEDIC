@@ -6,6 +6,20 @@ const cookieParser = require('cookie-parser');
 require('dotenv').config();
 
 const { authenticate } = require('./middleware/auth');
+const { requestContext } = require('./lib/requestContext');
+const { logError } = require('./lib/errorLog');
+
+// Guarda en BD cualquier console.error del proyecto (todas las rutas ya usan este
+// patrón en sus catch), para que sobreviva a que el contenedor se recree en cada
+// deploy — docker logs empieza vacío en cada contenedor nuevo.
+const originalConsoleError = console.error.bind(console);
+console.error = (...args) => {
+  originalConsoleError(...args);
+  const errorArg = args.find((a) => a instanceof Error);
+  const textoArgs = args.filter((a) => typeof a === 'string').join(' ');
+  const mensaje = textoArgs || errorArg?.message || 'Error sin mensaje';
+  logError(mensaje, errorArg?.stack).catch(() => {});
+};
 
 const healthRouter = require('./routes/health');
 const reniecRouter = require('./routes/reniec');
@@ -47,6 +61,12 @@ app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('dev'));
+
+// Guarda método+ruta de la request actual para que errorLog.js sepa dónde ocurrió
+// un error sin tener que pasarlo manualmente por cada catch del proyecto.
+app.use((req, res, next) => {
+  requestContext.run({ method: req.method, path: req.originalUrl }, next);
+});
 
 // Rate limiting
 const rateLimit = require('express-rate-limit');
@@ -93,6 +113,8 @@ app.use('/config', authenticate, configRouter);
 const configuracionPagoRouter = require('./routes/configuracionpago');
 app.use('/configuracion-pago', authenticate, configuracionPagoRouter);
 app.use('/auditoria', authenticate, auditoriaRouter);
+const errorLogsRouter = require('./routes/error-logs');
+app.use('/error-logs', authenticate, errorLogsRouter);
 app.use('/promociones', authenticate, promocionesRouter);
 const dashboardRouter = require('./routes/dashboard');
 app.use('/dashboard', authenticate, dashboardRouter);
@@ -115,6 +137,14 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
         res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     }
 }));
+
+// Red de seguridad: si una ruta deja pasar un error sin capturarlo (next(err) o
+// throw sin try/catch), esto lo registra en vez de dejar la request colgada.
+app.use((err, req, res, next) => {
+  console.error(err);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Error interno del servidor' });
+});
 
 const PORT = 4000;
 const server = app.listen(PORT, '0.0.0.0', () => console.log(`API escuchando en http://localhost:${PORT}`));
