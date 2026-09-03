@@ -604,10 +604,9 @@ export default function SalesPOS({ farmacia, user }) {
             return;
         }
 
-        // Los servicios marcados como editables pueden ponerse en cualquier
-        // precio (para eso existen); todo lo demás mantiene la regla de
-        // "solo se puede subir el precio base".
-        if (!isEditableService && newPrice < editingPriceItem.originalPrice) {
+        // Regla: solo se puede subir el precio base, nunca bajarlo — aplica también
+        // a los servicios marcados como editables (a pedido de Anderson).
+        if (newPrice < editingPriceItem.originalPrice) {
             alert(`No se puede bajar el precio. El precio base es S/ ${editingPriceItem.originalPrice.toFixed(2)}`);
             return;
         }
@@ -2062,18 +2061,22 @@ export default function SalesPOS({ farmacia, user }) {
                     {editingPriceItem?.tipo === 'servicio' ? (
                         <>
                             <p className="text-sm text-gray-600">
-                                Este servicio permite escribir el nombre y precio que se van a facturar en esta venta.
+                                Este servicio permite escribir el nombre que se va a facturar en esta venta.
                             </p>
                             <Input
                                 label="Nombre a facturar"
                                 value={newNameValue}
                                 onChange={(e) => setNewNameValue(e.target.value)}
                             />
+                            <div className="p-3 bg-indigo-50 rounded-lg text-sm text-indigo-700">
+                                Precio Base: <span className="font-bold">S/ {editingPriceItem?.originalPrice.toFixed(2)}</span>
+                                <p className="text-[10px] mt-1 italic">* Por política, solo se permite aumentar el precio inicial.</p>
+                            </div>
                             <Input
                                 label="Precio (S/)"
                                 type="number"
                                 step="0.01"
-                                min="0.01"
+                                min={editingPriceItem?.originalPrice}
                                 value={newPriceValue}
                                 onChange={(e) => setNewPriceValue(e.target.value)}
                             />
