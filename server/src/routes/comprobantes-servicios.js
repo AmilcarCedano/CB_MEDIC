@@ -381,7 +381,8 @@ router.post('/:id/cancel', requireAdmin, async (req, res) => {
     }
 
     if (password !== ADMIN_PASSWORD) {
-        return res.status(401).json({ error: 'Contraseña incorrecta' });
+        // 403, no 401: contraseña de negocio, no la sesión.
+        return res.status(403).json({ error: 'Contraseña incorrecta' });
     }
 
     try {

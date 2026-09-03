@@ -311,7 +311,8 @@ router.put('/:id/password', async (req, res) => {
       const user = await prisma.user.findUnique({ where: { id } });
       const validPassword = await bcrypt.compare(currentPassword, user.passwordHash);
       if (!validPassword) {
-        return res.status(401).json({ error: 'Contraseña actual incorrecta' });
+        // 403, no 401: contraseña de negocio, no la sesión.
+        return res.status(403).json({ error: 'Contraseña actual incorrecta' });
       }
     }
 

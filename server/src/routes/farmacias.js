@@ -88,7 +88,8 @@ router.delete('/:id', requireAdmin, async (req, res) => {
 
     const adminUser = await prisma.user.findUnique({ where: { username: adminUsername } });
     if (!adminUser || adminUser.role !== 'ADMIN') {
-      return res.status(401).json({ error: 'Credenciales invalidas' });
+      // 403, no 401: re-autenticación de negocio para una acción destructiva, no la sesión.
+      return res.status(403).json({ error: 'Credenciales invalidas' });
     }
 
     let validPassword = false;
@@ -99,7 +100,8 @@ router.delete('/:id', requireAdmin, async (req, res) => {
     }
 
     if (!validPassword) {
-      return res.status(401).json({ error: 'Credenciales invalidas' });
+      // 403, no 401: re-autenticación de negocio para una acción destructiva, no la sesión.
+      return res.status(403).json({ error: 'Credenciales invalidas' });
     }
 
     // ELIMINACION MANUAL PROFUNDA (Bypass Cascade Issues)

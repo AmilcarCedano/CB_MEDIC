@@ -140,7 +140,9 @@ router.post('/cerrar-turno/:id', async (req, res) => {
     }
 
     if (!passwordMatch) {
-      return res.status(401).json({ error: 'Contraseña incorrecta' });
+      // 403, no 401: es una contraseña de negocio (cerrar turno), no la sesión —
+      // un 401 acá dispara el interceptor global del frontend y cierra la sesión sola.
+      return res.status(403).json({ error: 'Contraseña incorrecta' });
     }
 
     const turno = await prisma.turnocaja.findFirst({
@@ -563,7 +565,8 @@ router.delete('/turno/:id', requireAdmin, async (req, res) => {
     }
 
     if (!isValid) {
-      return res.status(401).json({ error: 'Contraseña de administrador incorrecta' });
+      // 403, no 401: contraseña de negocio, no la sesión.
+      return res.status(403).json({ error: 'Contraseña de administrador incorrecta' });
     }
 
     // Verificar que el turno existe y pertenece a la farmacia
