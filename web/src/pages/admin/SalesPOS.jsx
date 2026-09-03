@@ -1128,7 +1128,7 @@ export default function SalesPOS({ farmacia, user }) {
                         <p className="text-xs text-gray-600">
                             {lastCartItem && targetedRecommendations.length > 0
                                 ? `Basado en ${lastCartItem.nombre}.`
-                                : 'Agrega un producto para ver sugerencias automáticas.'}
+                                : 'Esto podría interesarte según lo que llevas en el carrito.'}
                         </p>
                     </div>
 
