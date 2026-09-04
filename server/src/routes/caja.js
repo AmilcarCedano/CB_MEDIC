@@ -71,6 +71,7 @@ const calcularResumenTurno = async (turno) => {
     ? await prisma.comprobanteitem.findMany({
         where: { comprobanteId: { in: comprobantesParaCierre.map((c) => c.id) } },
         select: {
+          comprobanteId: true,
           cantidad: true,
           productoId: true,
           servicioId: true,
@@ -83,6 +84,13 @@ const calcularResumenTurno = async (turno) => {
         },
       })
     : [];
+
+  // Nombre "histórico": el que tenía el producto/servicio al momento de esa
+  // venta puntual (comprobanteitem.descripcion es una foto, no cambia si el
+  // producto se renombra después). Se usa para las devoluciones en vez del
+  // nombre actual de la ficha — si no, un producto renombrado hace que la
+  // devolución aparezca con un nombre distinto al que salió en la venta.
+  const nombreHistoricoPorLinea = new Map(); // "comprobanteId|p<id>" o "comprobanteId|s<id>" -> descripcion
 
   let medicamentosVendidos = 0;
   let serviciosRealizados = 0;
@@ -105,6 +113,9 @@ const calcularResumenTurno = async (turno) => {
   };
 
   for (const it of itemsTurno) {
+    if (it.productoId) nombreHistoricoPorLinea.set(`${it.comprobanteId}|p${it.productoId}`, it.descripcion);
+    if (it.servicioId) nombreHistoricoPorLinea.set(`${it.comprobanteId}|s${it.servicioId}`, it.descripcion);
+
     if (it.codigo_producto === 'DESC-PROMO') {
       promocionesVendidas += it.cantidad;
       const nombre = it.promoNombre || 'Promoción';
@@ -186,7 +197,12 @@ const calcularResumenTurno = async (turno) => {
 
   for (const dev of devolucionesTurno) {
     for (const di of dev.devolucionitem) {
-      const nombre = di.producto?.nombre || di.servicio?.nombre || 'Ítem';
+      const nombreHistorico = di.productoId
+        ? nombreHistoricoPorLinea.get(`${dev.comprobanteId}|p${di.productoId}`)
+        : di.servicioId
+        ? nombreHistoricoPorLinea.get(`${dev.comprobanteId}|s${di.servicioId}`)
+        : null;
+      const nombre = nombreHistorico || di.producto?.nombre || di.servicio?.nombre || 'Ítem';
       const monto = Number(di.subtotal);
       const precio = Number(di.precioUnitario);
       unidadesDevueltas += di.cantidad;
