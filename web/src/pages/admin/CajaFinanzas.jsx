@@ -20,99 +20,171 @@ import {
 import { api } from '../../lib/api';
 import { Card, Button, Input, Modal } from './components/ui';
 
+// Fila de una tabla del resumen (medicamento, servicio o devolución), con
+// badge opcional (promo / nombre editado / devuelto) debajo del nombre.
+const FilaResumen = ({ nombre, cantidad, precioUnitario, total, badges }) => (
+    <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 items-center px-3 py-2.5 text-sm bg-white">
+        <div className="min-w-0">
+            <p className="font-medium text-gray-900 truncate">{nombre}</p>
+            {badges}
+        </div>
+        <span className="text-gray-500 tabular-nums text-right">{cantidad}</span>
+        <span className="text-gray-500 tabular-nums text-right">S/{precioUnitario.toFixed(2)}</span>
+        <span className="font-bold text-gray-900 tabular-nums text-right">S/{total.toFixed(2)}</span>
+    </div>
+);
+
+// Tabla genérica (encabezado + filas con scroll) reutilizada por cada sección.
+const TablaResumen = ({ titulo, colorClasses, headerCols, children, maxH = "max-h-64" }) => (
+    <div className="rounded-xl border border-gray-200 overflow-hidden h-full flex flex-col">
+        <div className={`px-3 py-2 ${colorClasses}`}>
+            <p className="text-xs font-bold uppercase tracking-wide">{titulo}</p>
+        </div>
+        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 px-3 py-1.5 bg-gray-50 text-[10px] font-bold text-gray-500 uppercase tracking-wide">
+            {headerCols}
+        </div>
+        <div className={`${maxH} overflow-y-auto divide-y divide-gray-100 flex-1`}>
+            {children}
+        </div>
+    </div>
+);
+
 // Detalle de lo vendido en un turno: totales + listas de qué se vendió, a qué
-// precio, y si un servicio/producto vino de una promoción o con nombre editado.
-// Se usa tanto en la vista previa (antes de cerrar) como en el resumen final.
+// precio, si vino de una promoción, si se editó el nombre, y si tuvo una
+// devolución después. Se usa en la vista previa, el resumen final de cierre,
+// y en el Historial de Cierres (turnos pasados) — un solo lugar para los tres.
 const ResumenDetalle = ({ resumen }) => {
-    const { resumenVentas, detalleMedicamentos = [], detalleServicios = [], detallePromociones = [] } = resumen;
+    const {
+        resumenVentas,
+        detalleMedicamentos = [],
+        detalleServicios = [],
+        detallePromociones = [],
+        detalleDevoluciones = [],
+    } = resumen;
+    const hayDevoluciones = (resumenVentas?.unidadesDevueltas ?? 0) > 0;
+
     return (
-        <>
-            <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
-                    <p className="text-2xl font-bold text-indigo-800 tabular-nums">{resumenVentas?.medicamentosVendidos ?? 0}</p>
-                    <p className="text-[11px] text-indigo-600 font-medium mt-1">Medicamentos vendidos</p>
+        <div className="space-y-5">
+            <div className={`grid grid-cols-2 ${hayDevoluciones ? 'sm:grid-cols-4' : 'sm:grid-cols-3'} gap-3 text-center`}>
+                <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
+                    <p className="text-3xl font-black text-indigo-800 tabular-nums">{resumenVentas?.medicamentosVendidos ?? 0}</p>
+                    <p className="text-xs text-indigo-600 font-semibold mt-1">Medicamentos vendidos</p>
                 </div>
-                <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
-                    <p className="text-2xl font-bold text-amber-800 tabular-nums">{resumenVentas?.serviciosRealizados ?? 0}</p>
-                    <p className="text-[11px] text-amber-600 font-medium mt-1">Servicios realizados</p>
+                <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl">
+                    <p className="text-3xl font-black text-amber-800 tabular-nums">{resumenVentas?.serviciosRealizados ?? 0}</p>
+                    <p className="text-xs text-amber-600 font-semibold mt-1">Servicios realizados</p>
                 </div>
-                <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl">
-                    <p className="text-2xl font-bold text-rose-800 tabular-nums">{resumenVentas?.promocionesVendidas ?? 0}</p>
-                    <p className="text-[11px] text-rose-600 font-medium mt-1">Promociones vendidas</p>
+                <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl">
+                    <p className="text-3xl font-black text-rose-800 tabular-nums">{resumenVentas?.promocionesVendidas ?? 0}</p>
+                    <p className="text-xs text-rose-600 font-semibold mt-1">Promociones vendidas</p>
                 </div>
+                {hayDevoluciones && (
+                    <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+                        <p className="text-3xl font-black text-red-700 tabular-nums">{resumenVentas.unidadesDevueltas}</p>
+                        <p className="text-xs text-red-600 font-semibold mt-1">Unidades devueltas (-S/{resumenVentas.montoDevuelto.toFixed(2)})</p>
+                    </div>
+                )}
             </div>
 
-            {detalleMedicamentos.length > 0 && (
-                <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Medicamentos vendidos</p>
-                    <div className="rounded-lg border border-gray-200 overflow-hidden">
-                        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 px-2.5 py-1.5 bg-gray-100 text-[10px] font-bold text-gray-500 uppercase tracking-wide">
-                            <span>Producto</span><span className="text-right">Cant.</span><span className="text-right">P. Unit</span><span className="text-right">Total</span>
-                        </div>
-                        <div className="max-h-40 overflow-y-auto divide-y divide-gray-100">
+            {(detalleMedicamentos.length > 0 || detalleServicios.length > 0) && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {detalleMedicamentos.length > 0 && (
+                        <TablaResumen
+                            titulo="Medicamentos vendidos"
+                            colorClasses="bg-indigo-50 text-indigo-700"
+                            headerCols={<><span>Producto</span><span className="text-right">Cant.</span><span className="text-right">P. Unit</span><span className="text-right">Total</span></>}
+                        >
                             {detalleMedicamentos.map((m, idx) => (
-                                <div key={idx} className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 items-center px-2.5 py-2 text-sm bg-white">
-                                    <div className="min-w-0 flex items-center gap-1.5">
-                                        <span className="font-medium text-gray-900 truncate">{m.nombre}</span>
-                                        {m.promoNombre && (
-                                            <span title={`Promoción: ${m.promoNombre}`} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-100 text-rose-700">🏷️ Promo</span>
-                                        )}
-                                    </div>
-                                    <span className="text-gray-500 tabular-nums text-right">{m.cantidad}</span>
-                                    <span className="text-gray-500 tabular-nums text-right">S/{m.precioUnitario.toFixed(2)}</span>
-                                    <span className="font-bold text-gray-900 tabular-nums text-right">S/{m.total.toFixed(2)}</span>
-                                </div>
+                                <FilaResumen
+                                    key={idx}
+                                    nombre={m.nombre}
+                                    cantidad={m.cantidad}
+                                    precioUnitario={m.precioUnitario}
+                                    total={m.total}
+                                    badges={
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                            {m.promoNombre && (
+                                                <span title={`Promoción: ${m.promoNombre}`} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-100 text-rose-700">🏷️ Promo</span>
+                                            )}
+                                            {m.cantidadDevuelta && (
+                                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-100 text-red-700">↩️ {m.cantidadDevuelta} devuelto(s) · -S/{m.montoDevuelto.toFixed(2)}</span>
+                                            )}
+                                        </div>
+                                    }
+                                />
                             ))}
-                        </div>
-                    </div>
-                </div>
-            )}
+                        </TablaResumen>
+                    )}
 
-            {detalleServicios.length > 0 && (
-                <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Servicios realizados</p>
-                    <div className="rounded-lg border border-gray-200 overflow-hidden">
-                        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 px-2.5 py-1.5 bg-gray-100 text-[10px] font-bold text-gray-500 uppercase tracking-wide">
-                            <span>Servicio</span><span className="text-right">Cant.</span><span className="text-right">P. Unit</span><span className="text-right">Total</span>
-                        </div>
-                        <div className="max-h-40 overflow-y-auto divide-y divide-gray-100">
+                    {detalleServicios.length > 0 && (
+                        <TablaResumen
+                            titulo="Servicios realizados"
+                            colorClasses="bg-amber-50 text-amber-700"
+                            headerCols={<><span>Servicio</span><span className="text-right">Cant.</span><span className="text-right">P. Unit</span><span className="text-right">Total</span></>}
+                        >
                             {detalleServicios.map((s, idx) => (
-                                <div key={idx} className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 items-center px-2.5 py-2 text-sm bg-white">
-                                    <div className="min-w-0 flex items-center gap-1.5">
-                                        <span className="font-medium text-gray-900 truncate">{s.nombre}</span>
-                                        {s.nombreOriginal && (
-                                            <span title={`Nombre original: ${s.nombreOriginal}`} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-indigo-100 text-indigo-700">✏️ Editado</span>
-                                        )}
-                                    </div>
-                                    <span className="text-gray-500 tabular-nums text-right">{s.cantidad}</span>
-                                    <span className="text-gray-500 tabular-nums text-right">S/{s.precioUnitario.toFixed(2)}</span>
-                                    <span className="font-bold text-gray-900 tabular-nums text-right">S/{s.total.toFixed(2)}</span>
-                                </div>
+                                <FilaResumen
+                                    key={idx}
+                                    nombre={s.nombre}
+                                    cantidad={s.cantidad}
+                                    precioUnitario={s.precioUnitario}
+                                    total={s.total}
+                                    badges={
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                            {s.nombreOriginal && (
+                                                <span title={`Nombre original: ${s.nombreOriginal}`} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-indigo-100 text-indigo-700">✏️ Editado</span>
+                                            )}
+                                            {s.cantidadDevuelta && (
+                                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-100 text-red-700">↩️ {s.cantidadDevuelta} devuelto(s) · -S/{s.montoDevuelto.toFixed(2)}</span>
+                                            )}
+                                        </div>
+                                    }
+                                />
                             ))}
-                        </div>
-                    </div>
+                        </TablaResumen>
+                    )}
                 </div>
             )}
 
-            {detallePromociones.length > 0 && (
-                <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Promociones aplicadas</p>
-                    <div className="rounded-lg border border-rose-200 overflow-hidden">
-                        <div className="grid grid-cols-[1fr_auto] gap-x-3 px-2.5 py-1.5 bg-rose-100 text-[10px] font-bold text-rose-700 uppercase tracking-wide">
-                            <span>Promoción</span><span className="text-right">Vendidas</span>
+            {(detallePromociones.length > 0 || detalleDevoluciones.length > 0) && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {detallePromociones.length > 0 && (
+                        <div className="rounded-xl border border-rose-200 overflow-hidden">
+                            <div className="px-3 py-2 bg-rose-100"><p className="text-xs font-bold uppercase tracking-wide text-rose-700">Promociones aplicadas</p></div>
+                            <div className="grid grid-cols-[1fr_auto] gap-x-3 px-3 py-1.5 bg-rose-50 text-[10px] font-bold text-rose-600 uppercase tracking-wide">
+                                <span>Promoción</span><span className="text-right">Vendidas</span>
+                            </div>
+                            <div className="divide-y divide-rose-100 max-h-40 overflow-y-auto">
+                                {detallePromociones.map((p, idx) => (
+                                    <div key={idx} className="grid grid-cols-[1fr_auto] gap-x-3 items-center px-3 py-2.5 text-sm bg-white">
+                                        <span className="font-medium text-rose-900 truncate">{p.nombre}</span>
+                                        <span className="text-rose-700 font-bold tabular-nums text-right">x{p.cantidad}</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                        <div className="divide-y divide-rose-100">
-                            {detallePromociones.map((p, idx) => (
-                                <div key={idx} className="grid grid-cols-[1fr_auto] gap-x-3 items-center px-2.5 py-2 text-sm bg-rose-50">
-                                    <span className="font-medium text-rose-900 truncate">{p.nombre}</span>
-                                    <span className="text-rose-700 font-bold tabular-nums text-right">x{p.cantidad}</span>
-                                </div>
-                            ))}
+                    )}
+
+                    {detalleDevoluciones.length > 0 && (
+                        <div className="rounded-xl border border-red-200 overflow-hidden">
+                            <div className="px-3 py-2 bg-red-100"><p className="text-xs font-bold uppercase tracking-wide text-red-700">Devoluciones del turno</p></div>
+                            <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-3 py-1.5 bg-red-50 text-[10px] font-bold text-red-600 uppercase tracking-wide">
+                                <span>Producto/Servicio</span><span className="text-right">Cant.</span><span className="text-right">Monto</span>
+                            </div>
+                            <div className="divide-y divide-red-100 max-h-40 overflow-y-auto">
+                                {detalleDevoluciones.map((d, idx) => (
+                                    <div key={idx} className="grid grid-cols-[1fr_auto_auto] gap-x-3 items-center px-3 py-2.5 text-sm bg-white">
+                                        <span className="font-medium text-red-900 truncate">{d.nombre}</span>
+                                        <span className="text-red-700 tabular-nums text-right">x{d.cantidad}</span>
+                                        <span className="text-red-700 font-bold tabular-nums text-right">-S/{d.monto.toFixed(2)}</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             )}
-        </>
+        </div>
     );
 };
 
@@ -316,7 +388,7 @@ const CajaFinanzas = ({ farmacia, user }) => {
 
         return (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto !p-4 sm:!p-6">
+                <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto !p-4 sm:!p-6">
                     <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-100">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center"><FileText size={20} className="text-indigo-600" /></div>
@@ -616,7 +688,7 @@ const CajaFinanzas = ({ farmacia, user }) => {
             )}
 
             {previewResumen && (
-                <Modal isOpen={!!previewResumen} onClose={() => setPreviewResumen(null)} title="Resumen del Turno (antes de cerrar)">
+                <Modal isOpen={!!previewResumen} onClose={() => setPreviewResumen(null)} title="Resumen del Turno (antes de cerrar)" maxWidth="max-w-4xl">
                     <div className="space-y-4">
                         <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-center">
                             <p className="text-xs text-emerald-700 font-medium uppercase tracking-wide">Total en caja hasta el momento</p>
@@ -632,7 +704,7 @@ const CajaFinanzas = ({ farmacia, user }) => {
             )}
 
             {cierreResumen && (
-                <Modal isOpen={!!cierreResumen} onClose={() => setCierreResumen(null)} title="Turno Cerrado — Resumen del Día">
+                <Modal isOpen={!!cierreResumen} onClose={() => setCierreResumen(null)} title="Turno Cerrado — Resumen del Día" maxWidth="max-w-4xl">
                     <div className="space-y-4">
                         <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-center">
                             <p className="text-xs text-emerald-700 font-medium uppercase tracking-wide">Total en caja</p>

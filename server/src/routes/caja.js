@@ -106,14 +106,70 @@ const calcularResumenTurno = async (turno) => {
     }
   }
 
+  // Devoluciones de ventas hechas en este turno (aunque la devolución en sí se
+  // haya procesado después) — así el resumen explica por qué el monto neto de
+  // un medicamento/servicio quedó por debajo de lo que aparenta la venta bruta.
+  const devolucionesTurno = comprobantesParaCierre.length
+    ? await prisma.devolucion.findMany({
+        where: { comprobanteId: { in: comprobantesParaCierre.map((c) => c.id) } },
+        include: {
+          devolucionitem: {
+            select: {
+              cantidad: true,
+              subtotal: true,
+              producto: { select: { nombre: true } },
+              servicio: { select: { nombre: true } },
+            },
+          },
+        },
+      })
+    : [];
+
+  let unidadesDevueltas = 0;
+  let montoDevuelto = 0;
+  const devolucionesPorNombre = new Map(); // nombre -> { cantidad, monto } — para cruzar con cada línea
+  const devolucionesMap = new Map(); // para la tabla propia de devoluciones
+
+  for (const dev of devolucionesTurno) {
+    for (const di of dev.devolucionitem) {
+      const nombre = di.producto?.nombre || di.servicio?.nombre || 'Ítem';
+      const monto = Number(di.subtotal);
+      unidadesDevueltas += di.cantidad;
+      montoDevuelto = round2(montoDevuelto + monto);
+
+      const porNombre = devolucionesPorNombre.get(nombre);
+      if (porNombre) {
+        porNombre.cantidad += di.cantidad;
+        porNombre.monto = round2(porNombre.monto + monto);
+      } else {
+        devolucionesPorNombre.set(nombre, { cantidad: di.cantidad, monto });
+      }
+
+      const prevFila = devolucionesMap.get(nombre);
+      if (prevFila) {
+        prevFila.cantidad += di.cantidad;
+        prevFila.monto = round2(prevFila.monto + monto);
+      } else {
+        devolucionesMap.set(nombre, { nombre, cantidad: di.cantidad, monto });
+      }
+    }
+  }
+
+  // Cruza cada medicamento/servicio con su devolución (si tuvo) por nombre.
+  const conDevolucion = (lista) => lista.map((item) => {
+    const dev = devolucionesPorNombre.get(item.nombre);
+    return dev ? { ...item, cantidadDevuelta: dev.cantidad, montoDevuelto: dev.monto } : item;
+  });
+
   return {
     montoVentas,
     montoEgresos,
     montoFinal,
-    resumenVentas: { medicamentosVendidos, serviciosRealizados, promocionesVendidas },
-    detalleMedicamentos: Array.from(medicamentosMap.values()).sort((a, b) => b.cantidad - a.cantidad),
-    detalleServicios: Array.from(serviciosMap.values()).sort((a, b) => b.cantidad - a.cantidad),
+    resumenVentas: { medicamentosVendidos, serviciosRealizados, promocionesVendidas, unidadesDevueltas, montoDevuelto },
+    detalleMedicamentos: conDevolucion(Array.from(medicamentosMap.values()).sort((a, b) => b.cantidad - a.cantidad)),
+    detalleServicios: conDevolucion(Array.from(serviciosMap.values()).sort((a, b) => b.cantidad - a.cantidad)),
     detallePromociones: Array.from(promocionesMap, ([nombre, cantidad]) => ({ nombre, cantidad })).sort((a, b) => b.cantidad - a.cantidad),
+    detalleDevoluciones: Array.from(devolucionesMap.values()).sort((a, b) => b.monto - a.monto),
   };
 };
 
