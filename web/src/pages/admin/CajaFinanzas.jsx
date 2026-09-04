@@ -18,7 +18,7 @@ import {
     Edit
 } from 'lucide-react';
 import { api } from '../../lib/api';
-import { Card, Button, Input } from './components/ui';
+import { Card, Button, Input, Modal } from './components/ui';
 
 const CajaFinanzas = ({ farmacia, user }) => {
     const isAdmin = user?.role === 'ADMIN';
@@ -33,6 +33,7 @@ const CajaFinanzas = ({ farmacia, user }) => {
     const [montoEgreso, setMontoEgreso] = useState('');
     const [motivoEgreso, setMotivoEgreso] = useState('');
     const [observacionesCierre, setObservacionesCierre] = useState({ observaciones: '', password: '' });
+    const [cierreResumen, setCierreResumen] = useState(null);
     const [historialTurnos, setHistorialTurnos] = useState([]);
     const [, setEgresos] = useState([]);
     const [showDetallesModal, setShowDetallesModal] = useState(false);
@@ -153,12 +154,13 @@ const CajaFinanzas = ({ farmacia, user }) => {
             return;
         }
         try {
-            await api.post(`/caja/cerrar-turno/${turnoActivo.id}`, {
+            const { data } = await api.post(`/caja/cerrar-turno/${turnoActivo.id}`, {
                 observaciones: observacionesCierre.observaciones,
                 password: observacionesCierre.password
             }, { headers: { 'x-farmacia-id': farmacia.id } });
             setShowModalCierre(false);
             setObservacionesCierre({ observaciones: '', password: '' });
+            setCierreResumen(data);
             fetchTurnoActivo();
         } catch (error) {
             alert(error.response?.data?.error || 'Error al cerrar turno');
@@ -461,6 +463,32 @@ const CajaFinanzas = ({ farmacia, user }) => {
                 </div>
             )}
             {showDetallesModal && <ModalDetalles />}
+
+            {cierreResumen && (
+                <Modal isOpen={!!cierreResumen} onClose={() => setCierreResumen(null)} title="Turno Cerrado — Resumen del Día">
+                    <div className="space-y-4">
+                        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-center">
+                            <p className="text-xs text-emerald-700 font-medium uppercase tracking-wide">Total en caja</p>
+                            <p className="text-3xl font-bold text-emerald-800 tabular-nums">S/ {parseFloat(cierreResumen.montoFinal || 0).toFixed(2)}</p>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
+                                <p className="text-2xl font-bold text-indigo-800 tabular-nums">{cierreResumen.resumenVentas?.medicamentosVendidos ?? 0}</p>
+                                <p className="text-[11px] text-indigo-600 font-medium mt-1">Medicamentos vendidos</p>
+                            </div>
+                            <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                                <p className="text-2xl font-bold text-amber-800 tabular-nums">{cierreResumen.resumenVentas?.serviciosRealizados ?? 0}</p>
+                                <p className="text-[11px] text-amber-600 font-medium mt-1">Servicios realizados</p>
+                            </div>
+                            <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl">
+                                <p className="text-2xl font-bold text-rose-800 tabular-nums">{cierreResumen.resumenVentas?.promocionesVendidas ?? 0}</p>
+                                <p className="text-[11px] text-rose-600 font-medium mt-1">Promociones vendidas</p>
+                            </div>
+                        </div>
+                        <Button variant="primary" className="w-full" onClick={() => setCierreResumen(null)}>Entendido</Button>
+                    </div>
+                </Modal>
+            )}
         </div>
     );
 };

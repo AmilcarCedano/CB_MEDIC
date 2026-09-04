@@ -177,6 +177,31 @@ router.post('/cerrar-turno/:id', async (req, res) => {
     const montoEgresos = round2(Number(turno.montoEgresos) || 0);
     const montoFinal = round2(Number(turno.montoInicial) + montoVentas - montoEgresos);
 
+    // Resumen de lo vendido en el turno: cuántos medicamentos, servicios y
+    // promociones. Se cuenta por unidades (cantidad), no por líneas de comprobante,
+    // y sobre las mismas comprobantes usadas para calcular montoVentas (no se
+    // netea contra devoluciones — es un conteo de lo emitido en el turno).
+    const itemsTurno = comprobantesParaCierre.length
+      ? await prisma.comprobanteitem.findMany({
+          where: { comprobanteId: { in: comprobantesParaCierre.map((c) => c.id) } },
+          select: { cantidad: true, productoId: true, servicioId: true, codigo_producto: true },
+        })
+      : [];
+
+    let medicamentosVendidos = 0;
+    let serviciosRealizados = 0;
+    let promocionesVendidas = 0;
+    for (const it of itemsTurno) {
+      if (it.codigo_producto === 'DESC-PROMO') {
+        promocionesVendidas += it.cantidad;
+      } else if (it.servicioId) {
+        serviciosRealizados += it.cantidad;
+      } else if (it.productoId) {
+        medicamentosVendidos += it.cantidad;
+      }
+    }
+    const resumenVentas = { medicamentosVendidos, serviciosRealizados, promocionesVendidas };
+
     const turnoCerrado = await prisma.turnocaja.update({
       where: { id: turno.id },
       data: {
@@ -188,16 +213,16 @@ router.post('/cerrar-turno/:id', async (req, res) => {
       }
     });
 
-    logAudit({ 
-      farmaciaId, 
-      usuarioId: userId, 
-      accion: 'CERRAR', 
-      modulo: 'CAJA', 
-      descripcion: `Turno de caja cerrado por ${usuario.fullName}. Ventas: S/ ${montoVentas.toFixed(2)}, Egresos: S/ ${montoEgresos.toFixed(2)}, Final: S/ ${montoFinal.toFixed(2)}`, 
-      detalles: { turnoId: turno.id } 
+    logAudit({
+      farmaciaId,
+      usuarioId: userId,
+      accion: 'CERRAR',
+      modulo: 'CAJA',
+      descripcion: `Turno de caja cerrado por ${usuario.fullName}. Ventas: S/ ${montoVentas.toFixed(2)}, Egresos: S/ ${montoEgresos.toFixed(2)}, Final: S/ ${montoFinal.toFixed(2)}. Medicamentos: ${medicamentosVendidos}, Servicios: ${serviciosRealizados}, Promociones: ${promocionesVendidas}`,
+      detalles: { turnoId: turno.id, ...resumenVentas }
     });
-    
-    res.json(turnoCerrado);
+
+    res.json({ ...turnoCerrado, resumenVentas });
 
   } catch (error) {
     console.error('Error al cerrar turno:', error);

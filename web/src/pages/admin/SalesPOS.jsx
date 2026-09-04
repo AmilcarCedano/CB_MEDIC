@@ -1003,10 +1003,13 @@ export default function SalesPOS({ farmacia, user }) {
                     productId: item.tipo === 'promo' ? item.promoId : Number(item.id),
                     quantity: Number(item.quantity),
                     type: item.tipo === 'servicio' ? 'SERVICE' : (item.tipo === 'promo' ? 'PROMO' : 'PRODUCT'),
-                    // Precio y nombre editables SOLO existen para servicios. El backend
-                    // vuelve a validar el precio contra la ficha (solo permite subirlo,
-                    // nunca bajarlo) y el nombre solo si el servicio tiene "permiteEditar".
-                    ...(item.tipo === 'servicio' ? { nombrePersonalizado: item.nombre, precioUnitario: item.price } : {}),
+                    // Precio editable: medicamentos (productos) y servicios. Nunca
+                    // promociones. El backend vuelve a validar el precio contra el de
+                    // catálogo/ficha (solo permite subirlo, nunca bajarlo) — no confía en
+                    // lo que mande el cliente. El nombre personalizado solo tiene efecto
+                    // si el servicio tiene "permiteEditar".
+                    ...(item.tipo !== 'promo' ? { precioUnitario: item.price } : {}),
+                    ...(item.tipo === 'servicio' ? { nombrePersonalizado: item.nombre } : {}),
                 })),
                 clienteId: !client || client.id === 0 ? null : client.id,
                 metodoPago: paymentMethod,
@@ -1564,11 +1567,11 @@ export default function SalesPOS({ farmacia, user }) {
                                         <p className="font-bold text-sm text-gray-900 leading-tight truncate" title={item.nombre}>{item.nombre}</p>
                                         <div className="flex items-center gap-2 mt-0.5">
                                             <p className="text-[10px] text-gray-500 font-medium">S/ {item.price.toFixed(2)} / ud.</p>
-                                            {item.tipo === 'servicio' && (
+                                            {(item.tipo === 'producto' || item.tipo === 'servicio') && (
                                                 <button
                                                     onClick={() => { setEditingPriceItem(item); setNewPriceValue(item.price.toString()); setNewNameValue(item.nombre); }}
                                                     className="px-1.5 py-0.5 flex items-center gap-1 text-[9px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-md border border-indigo-100 transition-colors"
-                                                    title={item.permiteEditar ? 'Editar nombre y aumentar precio' : 'Aumentar precio'}
+                                                    title={item.tipo === 'servicio' && item.permiteEditar ? 'Editar nombre y aumentar precio' : 'Aumentar precio'}
                                                 >
                                                     <Edit size={10} /> EDITAR
                                                 </button>

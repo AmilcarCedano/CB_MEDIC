@@ -309,16 +309,21 @@ router.post('/', async (req, res) => {
         }
         stockMap.set(dbProduct.id, availableStock - item.quantity);
 
-        // Productos: precio siempre el de catálogo. El precio editable es solo para
-        // servicios (a propósito) — un producto nunca acepta un precio distinto al de
-        // su ficha, sin importar qué mande el carrito.
+        // Precio: por defecto el de catálogo. El cajero puede subirlo desde el carrito
+        // (nunca bajarlo) — se revalida acá, no se confía en lo que mande el cliente.
+        const precioBaseProducto = parseFloat(dbProduct.precioVenta);
+        const precioSolicitadoProducto = Number(item.precioUnitario);
+        const precioFinalProducto = Number.isFinite(precioSolicitadoProducto) && precioSolicitadoProducto > precioBaseProducto
+          ? precioSolicitadoProducto
+          : precioBaseProducto;
+
         processedItems.push({
           ...item,
           type: 'PRODUCT',
           dbId: dbProduct.id,
           nombre: dbProduct.nombre,
           codigo: dbProduct.codigoBarras,
-          precioUnitario: parseFloat(dbProduct.precioVenta),
+          precioUnitario: precioFinalProducto,
           quantity: item.quantity
         });
       }
