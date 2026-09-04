@@ -137,7 +137,21 @@ const CajaFinanzas = ({ farmacia, user }) => {
     const [, setEgresos] = useState([]);
     const [showDetallesModal, setShowDetallesModal] = useState(false);
     const [turnoSeleccionado, setTurnoSeleccionado] = useState(null);
+    const [resumenTurnoSeleccionado, setResumenTurnoSeleccionado] = useState(null);
+    const [loadingResumenTurno, setLoadingResumenTurno] = useState(false);
     const [ventas, setVentas] = useState([]);
+
+    useEffect(() => {
+        if (!turnoSeleccionado) {
+            setResumenTurnoSeleccionado(null);
+            return;
+        }
+        setLoadingResumenTurno(true);
+        api.get(`/caja/turno/${turnoSeleccionado.id}/resumen`, { headers: { 'x-farmacia-id': farmacia.id } })
+            .then(({ data }) => setResumenTurnoSeleccionado(data))
+            .catch(() => setResumenTurnoSeleccionado(null))
+            .finally(() => setLoadingResumenTurno(false));
+    }, [turnoSeleccionado?.id]);
 
     useEffect(() => {
         fetchTurnoActivo();
@@ -341,6 +355,12 @@ const CajaFinanzas = ({ farmacia, user }) => {
                             </div>
                         </div>
                     )}
+                    <div className="mb-4">
+                        <h4 className="font-semibold text-gray-900 mb-3 text-sm flex items-center gap-2"><TrendingUp size={16} className="text-indigo-600" />Resumen de Caja — qué se vendió ese día</h4>
+                        {loadingResumenTurno && <p className="text-sm text-gray-500">Cargando resumen...</p>}
+                        {!loadingResumenTurno && resumenTurnoSeleccionado && <ResumenDetalle resumen={resumenTurnoSeleccionado} />}
+                        {!loadingResumenTurno && !resumenTurnoSeleccionado && <p className="text-sm text-gray-500">No se pudo cargar el resumen de este turno.</p>}
+                    </div>
                     <div className="flex justify-end mt-4">
                         <Button variant="secondary" onClick={() => setShowDetallesModal(false)} className="w-full sm:w-auto">Cerrar</Button>
                     </div>

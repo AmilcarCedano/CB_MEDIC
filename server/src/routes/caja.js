@@ -10,11 +10,17 @@ const { round2 } = require('../lib/money');
 // modificar nada. Se usa tanto para la vista previa (GET, antes de decidir cerrar)
 // como para el cierre real (POST), así ambas siempre muestran el mismo número.
 const calcularResumenTurno = async (turno) => {
+  // Si el turno ya está cerrado, acotar también por fechaCierre — si no, un
+  // turno histórico terminaría sumando ventas de los turnos que vinieron
+  // después (fecha_emision solo tenía piso, nunca techo).
+  const fecha_emision = { gte: turno.fechaApertura };
+  if (turno.fechaCierre) fecha_emision.lte = turno.fechaCierre;
+
   const comprobantesParaCierre = await prisma.comprobante.findMany({
     where: {
       farmaciaId: turno.farmaciaId,
       usuarioId: turno.usuarioId,
-      fecha_emision: { gte: turno.fechaApertura },
+      fecha_emision,
       estado_sunat: { not: 'ANULADO' },
     },
     include: { devolucion: { select: { totalDevuelto: true } } },
