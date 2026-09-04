@@ -20,6 +20,83 @@ import {
 import { api } from '../../lib/api';
 import { Card, Button, Input, Modal } from './components/ui';
 
+// Detalle de lo vendido en un turno: totales + listas de qué se vendió, a qué
+// precio, y si un servicio/producto vino de una promoción o con nombre editado.
+// Se usa tanto en la vista previa (antes de cerrar) como en el resumen final.
+const ResumenDetalle = ({ resumen }) => {
+    const { resumenVentas, detalleMedicamentos = [], detalleServicios = [], detallePromociones = [] } = resumen;
+    return (
+        <>
+            <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
+                    <p className="text-2xl font-bold text-indigo-800 tabular-nums">{resumenVentas?.medicamentosVendidos ?? 0}</p>
+                    <p className="text-[11px] text-indigo-600 font-medium mt-1">Medicamentos vendidos</p>
+                </div>
+                <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                    <p className="text-2xl font-bold text-amber-800 tabular-nums">{resumenVentas?.serviciosRealizados ?? 0}</p>
+                    <p className="text-[11px] text-amber-600 font-medium mt-1">Servicios realizados</p>
+                </div>
+                <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl">
+                    <p className="text-2xl font-bold text-rose-800 tabular-nums">{resumenVentas?.promocionesVendidas ?? 0}</p>
+                    <p className="text-[11px] text-rose-600 font-medium mt-1">Promociones vendidas</p>
+                </div>
+            </div>
+
+            {detalleMedicamentos.length > 0 && (
+                <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Medicamentos vendidos</p>
+                    <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                        {detalleMedicamentos.map((m, idx) => (
+                            <div key={idx} className="flex items-center justify-between text-sm p-2 bg-gray-50 rounded-lg">
+                                <div className="min-w-0">
+                                    <p className="font-medium text-gray-900 truncate">{m.nombre} <span className="text-gray-500 font-normal">x{m.cantidad}</span></p>
+                                    {m.promoNombre && (
+                                        <p className="text-[10px] text-rose-600 font-semibold">🏷️ Promoción: {m.promoNombre}</p>
+                                    )}
+                                </div>
+                                <span className="text-gray-700 font-semibold shrink-0 ml-2">S/ {m.precioUnitario.toFixed(2)}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {detalleServicios.length > 0 && (
+                <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Servicios realizados</p>
+                    <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                        {detalleServicios.map((s, idx) => (
+                            <div key={idx} className="flex items-center justify-between text-sm p-2 bg-gray-50 rounded-lg">
+                                <div className="min-w-0">
+                                    <p className="font-medium text-gray-900 truncate">{s.nombre} <span className="text-gray-500 font-normal">x{s.cantidad}</span></p>
+                                    {s.nombreOriginal && (
+                                        <p className="text-[10px] text-indigo-600 font-semibold">Servicio "{s.nombreOriginal}", editado a este nombre al vender</p>
+                                    )}
+                                </div>
+                                <span className="text-gray-700 font-semibold shrink-0 ml-2">S/ {s.precioUnitario.toFixed(2)}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {detallePromociones.length > 0 && (
+                <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Promociones aplicadas</p>
+                    <div className="space-y-1.5">
+                        {detallePromociones.map((p, idx) => (
+                            <div key={idx} className="flex items-center justify-between text-sm p-2 bg-rose-50 rounded-lg">
+                                <span className="font-medium text-rose-900">{p.nombre}</span>
+                                <span className="text-rose-700 font-semibold">x{p.cantidad}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </>
+    );
+};
+
 const CajaFinanzas = ({ farmacia, user }) => {
     const isAdmin = user?.role === 'ADMIN';
     const [vistaActual, setVistaActual] = useState('operativa'); // 'operativa' | 'admin'
@@ -503,20 +580,7 @@ const CajaFinanzas = ({ farmacia, user }) => {
                             <p className="text-xs text-emerald-700 font-medium uppercase tracking-wide">Total en caja hasta el momento</p>
                             <p className="text-3xl font-bold text-emerald-800 tabular-nums">S/ {parseFloat(previewResumen.montoFinal || 0).toFixed(2)}</p>
                         </div>
-                        <div className="grid grid-cols-3 gap-2 text-center">
-                            <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
-                                <p className="text-2xl font-bold text-indigo-800 tabular-nums">{previewResumen.resumenVentas?.medicamentosVendidos ?? 0}</p>
-                                <p className="text-[11px] text-indigo-600 font-medium mt-1">Medicamentos vendidos</p>
-                            </div>
-                            <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
-                                <p className="text-2xl font-bold text-amber-800 tabular-nums">{previewResumen.resumenVentas?.serviciosRealizados ?? 0}</p>
-                                <p className="text-[11px] text-amber-600 font-medium mt-1">Servicios realizados</p>
-                            </div>
-                            <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl">
-                                <p className="text-2xl font-bold text-rose-800 tabular-nums">{previewResumen.resumenVentas?.promocionesVendidas ?? 0}</p>
-                                <p className="text-[11px] text-rose-600 font-medium mt-1">Promociones vendidas</p>
-                            </div>
-                        </div>
+                        <ResumenDetalle resumen={previewResumen} />
                         <div className="flex flex-col sm:flex-row gap-2">
                             <Button variant="secondary" className="flex-1 w-full" onClick={() => setPreviewResumen(null)}>Seguir vendiendo</Button>
                             <Button variant="danger" className="flex-1 w-full" onClick={() => { setPreviewResumen(null); setShowModalCierre(true); }}>Cerrar Caja</Button>
@@ -532,20 +596,7 @@ const CajaFinanzas = ({ farmacia, user }) => {
                             <p className="text-xs text-emerald-700 font-medium uppercase tracking-wide">Total en caja</p>
                             <p className="text-3xl font-bold text-emerald-800 tabular-nums">S/ {parseFloat(cierreResumen.montoFinal || 0).toFixed(2)}</p>
                         </div>
-                        <div className="grid grid-cols-3 gap-2 text-center">
-                            <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
-                                <p className="text-2xl font-bold text-indigo-800 tabular-nums">{cierreResumen.resumenVentas?.medicamentosVendidos ?? 0}</p>
-                                <p className="text-[11px] text-indigo-600 font-medium mt-1">Medicamentos vendidos</p>
-                            </div>
-                            <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
-                                <p className="text-2xl font-bold text-amber-800 tabular-nums">{cierreResumen.resumenVentas?.serviciosRealizados ?? 0}</p>
-                                <p className="text-[11px] text-amber-600 font-medium mt-1">Servicios realizados</p>
-                            </div>
-                            <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl">
-                                <p className="text-2xl font-bold text-rose-800 tabular-nums">{cierreResumen.resumenVentas?.promocionesVendidas ?? 0}</p>
-                                <p className="text-[11px] text-rose-600 font-medium mt-1">Promociones vendidas</p>
-                            </div>
-                        </div>
+                        <ResumenDetalle resumen={cierreResumen} />
                         <Button variant="primary" className="w-full" onClick={() => setCierreResumen(null)}>Entendido</Button>
                     </div>
                 </Modal>

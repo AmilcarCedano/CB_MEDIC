@@ -27,26 +27,53 @@ const calcularResumenTurno = async (turno) => {
   const montoFinal = round2(Number(turno.montoInicial) + montoVentas - montoEgresos);
 
   // Resumen de lo vendido en el turno: cuántos medicamentos, servicios y
-  // promociones. Se cuenta por unidades (cantidad), no por líneas de comprobante,
-  // y sobre las mismas comprobantes usadas para calcular montoVentas (no se
-  // netea contra devoluciones — es un conteo de lo emitido en el turno).
+  // promociones, y el detalle de cada uno (qué se vendió, a qué precio).
+  // Se cuenta por unidades (cantidad), no por líneas de comprobante, y sobre
+  // las mismas comprobantes usadas para calcular montoVentas (no se netea
+  // contra devoluciones — es un conteo de lo emitido en el turno).
   const itemsTurno = comprobantesParaCierre.length
     ? await prisma.comprobanteitem.findMany({
         where: { comprobanteId: { in: comprobantesParaCierre.map((c) => c.id) } },
-        select: { cantidad: true, productoId: true, servicioId: true, codigo_producto: true },
+        select: {
+          cantidad: true,
+          productoId: true,
+          servicioId: true,
+          codigo_producto: true,
+          descripcion: true,
+          precio_unitario: true,
+          promoNombre: true,
+          servicio: { select: { nombre: true } },
+        },
       })
     : [];
 
   let medicamentosVendidos = 0;
   let serviciosRealizados = 0;
   let promocionesVendidas = 0;
+  const medicamentosMap = new Map();
+  const serviciosMap = new Map();
+  const promocionesMap = new Map();
+
   for (const it of itemsTurno) {
     if (it.codigo_producto === 'DESC-PROMO') {
       promocionesVendidas += it.cantidad;
+      const nombre = it.promoNombre || 'Promoción';
+      promocionesMap.set(nombre, (promocionesMap.get(nombre) || 0) + it.cantidad);
     } else if (it.servicioId) {
       serviciosRealizados += it.cantidad;
+      // Si el nombre facturado no coincide con el actual de la ficha, es porque
+      // el cajero lo editó al vender (servicio "permite editar").
+      const nombreOriginal = it.servicio && it.servicio.nombre !== it.descripcion ? it.servicio.nombre : null;
+      const key = `${it.descripcion}|${nombreOriginal || ''}|${it.precio_unitario}`;
+      const prev = serviciosMap.get(key);
+      if (prev) prev.cantidad += it.cantidad;
+      else serviciosMap.set(key, { nombre: it.descripcion, nombreOriginal, precioUnitario: Number(it.precio_unitario), cantidad: it.cantidad });
     } else if (it.productoId) {
       medicamentosVendidos += it.cantidad;
+      const key = `${it.descripcion}|${it.precio_unitario}|${it.promoNombre || ''}`;
+      const prev = medicamentosMap.get(key);
+      if (prev) prev.cantidad += it.cantidad;
+      else medicamentosMap.set(key, { nombre: it.descripcion, precioUnitario: Number(it.precio_unitario), cantidad: it.cantidad, promoNombre: it.promoNombre || null });
     }
   }
 
@@ -55,6 +82,9 @@ const calcularResumenTurno = async (turno) => {
     montoEgresos,
     montoFinal,
     resumenVentas: { medicamentosVendidos, serviciosRealizados, promocionesVendidas },
+    detalleMedicamentos: Array.from(medicamentosMap.values()).sort((a, b) => b.cantidad - a.cantidad),
+    detalleServicios: Array.from(serviciosMap.values()).sort((a, b) => b.cantidad - a.cantidad),
+    detallePromociones: Array.from(promocionesMap, ([nombre, cantidad]) => ({ nombre, cantidad })).sort((a, b) => b.cantidad - a.cantidad),
   };
 };
 
@@ -170,8 +200,8 @@ router.get('/turno/:id/resumen', async (req, res) => {
     });
     if (!turno) return res.status(404).json({ error: 'Turno no encontrado' });
 
-    const { montoVentas, montoEgresos, montoFinal, resumenVentas } = await calcularResumenTurno(turno);
-    return res.json({ montoVentas, montoEgresos, montoFinal, resumenVentas });
+    const resumen = await calcularResumenTurno(turno);
+    return res.json(resumen);
   } catch (error) {
     console.error('Error al calcular resumen de turno:', error);
     res.status(500).json({ error: 'No se pudo calcular el resumen del turno' });
@@ -232,7 +262,8 @@ router.post('/cerrar-turno/:id', async (req, res) => {
       return res.status(400).json({ error: 'El turno ya está cerrado' });
     }
 
-    const { montoVentas, montoEgresos, montoFinal, resumenVentas } = await calcularResumenTurno(turno);
+    const resumen = await calcularResumenTurno(turno);
+    const { montoVentas, montoEgresos, montoFinal, resumenVentas } = resumen;
     const { medicamentosVendidos, serviciosRealizados, promocionesVendidas } = resumenVentas;
 
     const turnoCerrado = await prisma.turnocaja.update({
@@ -255,7 +286,7 @@ router.post('/cerrar-turno/:id', async (req, res) => {
       detalles: { turnoId: turno.id, ...resumenVentas }
     });
 
-    res.json({ ...turnoCerrado, resumenVentas });
+    res.json({ ...turnoCerrado, ...resumen });
 
   } catch (error) {
     console.error('Error al cerrar turno:', error);

@@ -171,6 +171,9 @@ model comprobanteitem {
   servicioId      Int?
   codigo_producto String?
   descripcion     String
+  // Nombre de la promoción, solo si esta línea salió de una promo (producto
+  // incluido en el combo, o la línea de descuento). Null en ventas normales.
+  promoNombre     String?     @db.VarChar(200)
   cantidad        Int
   precio_unitario Decimal     @db.Decimal(10, 2)
   subtotal        Decimal     @db.Decimal(10, 2)
