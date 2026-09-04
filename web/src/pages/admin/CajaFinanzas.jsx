@@ -60,6 +60,8 @@ const ResumenDetalle = ({ resumen }) => {
         detalleServicios = [],
         detallePromociones = [],
         detalleDevoluciones = [],
+        detalleEgresos = [],
+        desglosePagos = [],
     } = resumen;
     const hayDevoluciones = (resumenVentas?.unidadesDevueltas ?? 0) > 0;
 
@@ -184,6 +186,46 @@ const ResumenDetalle = ({ resumen }) => {
                                         <span className="font-medium text-red-900 truncate">{d.nombre}</span>
                                         <span className="text-red-700 tabular-nums text-right">x{d.cantidad}</span>
                                         <span className="text-red-700 font-bold tabular-nums text-right">-S/{d.monto.toFixed(2)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {(detalleEgresos.length > 0 || desglosePagos.length > 0) && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {detalleEgresos.length > 0 && (
+                        <div className="rounded-xl border border-orange-200 overflow-hidden">
+                            <div className="px-3 py-2 bg-orange-100"><p className="text-xs font-bold uppercase tracking-wide text-orange-700">Egresos del turno (retiros de caja)</p></div>
+                            <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-3 py-1.5 bg-orange-50 text-[10px] font-bold text-orange-600 uppercase tracking-wide">
+                                <span>Motivo</span><span className="text-right">Hora</span><span className="text-right">Monto</span>
+                            </div>
+                            <div className="divide-y divide-orange-100 max-h-40 overflow-y-auto">
+                                {detalleEgresos.map((e, idx) => (
+                                    <div key={idx} className="grid grid-cols-[1fr_auto_auto] gap-x-3 items-center px-3 py-2.5 text-sm bg-white">
+                                        <span className="font-medium text-orange-900 truncate" title={e.motivo}>{e.motivo}</span>
+                                        <span className="text-orange-600 text-xs tabular-nums text-right">{new Date(e.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                        <span className="text-orange-700 font-bold tabular-nums text-right">-S/{e.monto.toFixed(2)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {desglosePagos.length > 0 && (
+                        <div className="rounded-xl border border-teal-200 overflow-hidden">
+                            <div className="px-3 py-2 bg-teal-100"><p className="text-xs font-bold uppercase tracking-wide text-teal-700">Desglose por método de pago</p></div>
+                            <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-3 py-1.5 bg-teal-50 text-[10px] font-bold text-teal-600 uppercase tracking-wide">
+                                <span>Método</span><span className="text-right">Ventas</span><span className="text-right">Monto</span>
+                            </div>
+                            <div className="divide-y divide-teal-100 max-h-40 overflow-y-auto">
+                                {desglosePagos.map((p, idx) => (
+                                    <div key={idx} className="grid grid-cols-[1fr_auto_auto] gap-x-3 items-center px-3 py-2.5 text-sm bg-white">
+                                        <span className="font-medium text-teal-900 truncate">{p.metodo}</span>
+                                        <span className="text-teal-700 tabular-nums text-right">x{p.cantidad}</span>
+                                        <span className="text-teal-700 font-bold tabular-nums text-right">S/{p.total.toFixed(2)}</span>
                                     </div>
                                 ))}
                             </div>

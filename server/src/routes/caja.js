@@ -32,6 +32,36 @@ const calcularResumenTurno = async (turno) => {
   const montoEgresos = round2(Number(turno.montoEgresos) || 0);
   const montoFinal = round2(Number(turno.montoInicial) + montoVentas - montoEgresos);
 
+  // Egresos (retiros de caja) del turno, uno por uno — el total ya está en
+  // montoEgresos, esto es el detalle de a qué se debió cada retiro.
+  const egresosTurno = await prisma.egresocaja.findMany({
+    where: { turnoId: turno.id },
+    select: { monto: true, motivo: true, fecha: true },
+    orderBy: { fecha: 'asc' },
+  });
+  const detalleEgresos = egresosTurno.map((e) => ({
+    monto: Number(e.monto),
+    motivo: e.motivo,
+    fecha: e.fecha,
+  }));
+
+  // Desglose de las ventas del turno por método de pago (efectivo, tarjeta,
+  // etc.), neteado contra devoluciones igual que montoVentas.
+  const desglosePagosMap = new Map();
+  for (const c of comprobantesParaCierre) {
+    const devuelto = round2(c.devolucion.reduce((d, dev) => d + Number(dev.totalDevuelto || 0), 0));
+    const netoLinea = round2(Number(c.total) - devuelto);
+    const metodo = c.forma_pago || 'Efectivo';
+    const prev = desglosePagosMap.get(metodo);
+    if (prev) {
+      prev.total = round2(prev.total + netoLinea);
+      prev.cantidad += 1;
+    } else {
+      desglosePagosMap.set(metodo, { metodo, total: netoLinea, cantidad: 1 });
+    }
+  }
+  const desglosePagos = Array.from(desglosePagosMap.values()).sort((a, b) => b.total - a.total);
+
   // Resumen de lo vendido en el turno: cuántos medicamentos, servicios y
   // promociones, y el detalle de cada uno (qué se vendió, a qué precio).
   // Se cuenta por unidades (cantidad), no por líneas de comprobante, y sobre
@@ -214,6 +244,8 @@ const calcularResumenTurno = async (turno) => {
     detalleServicios: conDevolucion(Array.from(serviciosMap.values()).sort((a, b) => b.cantidad - a.cantidad)),
     detallePromociones: Array.from(promocionesMap, ([nombre, v]) => ({ nombre, cantidad: v.cantidad, monto: v.monto })).sort((a, b) => b.cantidad - a.cantidad),
     detalleDevoluciones,
+    detalleEgresos,
+    desglosePagos,
   };
 };
 
