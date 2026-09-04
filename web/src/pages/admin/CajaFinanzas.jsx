@@ -47,14 +47,19 @@ const ResumenDetalle = ({ resumen }) => {
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Medicamentos vendidos</p>
                     <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
                         {detalleMedicamentos.map((m, idx) => (
-                            <div key={idx} className="flex items-center justify-between text-sm p-2 bg-gray-50 rounded-lg">
-                                <div className="min-w-0">
-                                    <p className="font-medium text-gray-900 truncate">{m.nombre} <span className="text-gray-500 font-normal">x{m.cantidad}</span></p>
-                                    {m.promoNombre && (
-                                        <p className="text-[10px] text-rose-600 font-semibold">🏷️ Promoción: {m.promoNombre}</p>
-                                    )}
+                            <div key={idx} className="p-2.5 bg-gray-50 rounded-lg">
+                                <div className="flex items-center justify-between gap-3">
+                                    <p className="font-medium text-gray-900 text-sm truncate min-w-0">{m.nombre}</p>
+                                    <div className="text-right shrink-0">
+                                        <p className="text-[11px] text-gray-500 tabular-nums">{m.cantidad} × S/ {m.precioUnitario.toFixed(2)}</p>
+                                        <p className="text-sm font-bold text-gray-900 tabular-nums">S/ {m.total.toFixed(2)}</p>
+                                    </div>
                                 </div>
-                                <span className="text-gray-700 font-semibold shrink-0 ml-2">S/ {m.precioUnitario.toFixed(2)}</span>
+                                {m.promoNombre && (
+                                    <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
+                                        🏷️ Promoción: {m.promoNombre}
+                                    </span>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -66,14 +71,19 @@ const ResumenDetalle = ({ resumen }) => {
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Servicios realizados</p>
                     <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
                         {detalleServicios.map((s, idx) => (
-                            <div key={idx} className="flex items-center justify-between text-sm p-2 bg-gray-50 rounded-lg">
-                                <div className="min-w-0">
-                                    <p className="font-medium text-gray-900 truncate">{s.nombre} <span className="text-gray-500 font-normal">x{s.cantidad}</span></p>
-                                    {s.nombreOriginal && (
-                                        <p className="text-[10px] text-indigo-600 font-semibold">Servicio "{s.nombreOriginal}", editado a este nombre al vender</p>
-                                    )}
+                            <div key={idx} className="p-2.5 bg-gray-50 rounded-lg">
+                                <div className="flex items-center justify-between gap-3">
+                                    <p className="font-medium text-gray-900 text-sm truncate min-w-0">{s.nombre}</p>
+                                    <div className="text-right shrink-0">
+                                        <p className="text-[11px] text-gray-500 tabular-nums">{s.cantidad} × S/ {s.precioUnitario.toFixed(2)}</p>
+                                        <p className="text-sm font-bold text-gray-900 tabular-nums">S/ {s.total.toFixed(2)}</p>
+                                    </div>
                                 </div>
-                                <span className="text-gray-700 font-semibold shrink-0 ml-2">S/ {s.precioUnitario.toFixed(2)}</span>
+                                {s.nombreOriginal && (
+                                    <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">
+                                        ✏️ Editado de "{s.nombreOriginal}"
+                                    </span>
+                                )}
                             </div>
                         ))}
                     </div>

@@ -41,6 +41,7 @@ const calcularResumenTurno = async (turno) => {
           codigo_producto: true,
           descripcion: true,
           precio_unitario: true,
+          total: true,
           promoNombre: true,
           servicio: { select: { nombre: true } },
         },
@@ -66,14 +67,36 @@ const calcularResumenTurno = async (turno) => {
       const nombreOriginal = it.servicio && it.servicio.nombre !== it.descripcion ? it.servicio.nombre : null;
       const key = `${it.descripcion}|${nombreOriginal || ''}|${it.precio_unitario}`;
       const prev = serviciosMap.get(key);
-      if (prev) prev.cantidad += it.cantidad;
-      else serviciosMap.set(key, { nombre: it.descripcion, nombreOriginal, precioUnitario: Number(it.precio_unitario), cantidad: it.cantidad });
+      if (prev) {
+        prev.cantidad += it.cantidad;
+        prev.total += Number(it.total);
+      } else {
+        serviciosMap.set(key, {
+          nombre: it.descripcion,
+          nombreOriginal,
+          // precio "grueso" (con IGV, el que ve el cajero) — precio_unitario en BD
+          // guarda el neto sin IGV para el desglose SUNAT, no sirve para mostrar acá.
+          precioUnitario: Number(it.total) / it.cantidad,
+          cantidad: it.cantidad,
+          total: Number(it.total),
+        });
+      }
     } else if (it.productoId) {
       medicamentosVendidos += it.cantidad;
       const key = `${it.descripcion}|${it.precio_unitario}|${it.promoNombre || ''}`;
       const prev = medicamentosMap.get(key);
-      if (prev) prev.cantidad += it.cantidad;
-      else medicamentosMap.set(key, { nombre: it.descripcion, precioUnitario: Number(it.precio_unitario), cantidad: it.cantidad, promoNombre: it.promoNombre || null });
+      if (prev) {
+        prev.cantidad += it.cantidad;
+        prev.total += Number(it.total);
+      } else {
+        medicamentosMap.set(key, {
+          nombre: it.descripcion,
+          precioUnitario: Number(it.total) / it.cantidad,
+          cantidad: it.cantidad,
+          total: Number(it.total),
+          promoNombre: it.promoNombre || null,
+        });
+      }
     }
   }
 
