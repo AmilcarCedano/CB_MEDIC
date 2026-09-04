@@ -45,23 +45,25 @@ const ResumenDetalle = ({ resumen }) => {
             {detalleMedicamentos.length > 0 && (
                 <div>
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Medicamentos vendidos</p>
-                    <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
-                        {detalleMedicamentos.map((m, idx) => (
-                            <div key={idx} className="p-2.5 bg-gray-50 rounded-lg">
-                                <div className="flex items-center justify-between gap-3">
-                                    <p className="font-medium text-gray-900 text-sm truncate min-w-0">{m.nombre}</p>
-                                    <div className="text-right shrink-0">
-                                        <p className="text-[11px] text-gray-500 tabular-nums">{m.cantidad} × S/ {m.precioUnitario.toFixed(2)}</p>
-                                        <p className="text-sm font-bold text-gray-900 tabular-nums">S/ {m.total.toFixed(2)}</p>
+                    <div className="rounded-lg border border-gray-200 overflow-hidden">
+                        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 px-2.5 py-1.5 bg-gray-100 text-[10px] font-bold text-gray-500 uppercase tracking-wide">
+                            <span>Producto</span><span className="text-right">Cant.</span><span className="text-right">P. Unit</span><span className="text-right">Total</span>
+                        </div>
+                        <div className="max-h-40 overflow-y-auto divide-y divide-gray-100">
+                            {detalleMedicamentos.map((m, idx) => (
+                                <div key={idx} className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 items-center px-2.5 py-2 text-sm bg-white">
+                                    <div className="min-w-0 flex items-center gap-1.5">
+                                        <span className="font-medium text-gray-900 truncate">{m.nombre}</span>
+                                        {m.promoNombre && (
+                                            <span title={`Promoción: ${m.promoNombre}`} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-100 text-rose-700">🏷️ Promo</span>
+                                        )}
                                     </div>
+                                    <span className="text-gray-500 tabular-nums text-right">{m.cantidad}</span>
+                                    <span className="text-gray-500 tabular-nums text-right">S/{m.precioUnitario.toFixed(2)}</span>
+                                    <span className="font-bold text-gray-900 tabular-nums text-right">S/{m.total.toFixed(2)}</span>
                                 </div>
-                                {m.promoNombre && (
-                                    <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
-                                        🏷️ Promoción: {m.promoNombre}
-                                    </span>
-                                )}
-                            </div>
-                        ))}
+                            ))}
+                        </div>
                     </div>
                 </div>
             )}
@@ -69,23 +71,25 @@ const ResumenDetalle = ({ resumen }) => {
             {detalleServicios.length > 0 && (
                 <div>
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Servicios realizados</p>
-                    <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
-                        {detalleServicios.map((s, idx) => (
-                            <div key={idx} className="p-2.5 bg-gray-50 rounded-lg">
-                                <div className="flex items-center justify-between gap-3">
-                                    <p className="font-medium text-gray-900 text-sm truncate min-w-0">{s.nombre}</p>
-                                    <div className="text-right shrink-0">
-                                        <p className="text-[11px] text-gray-500 tabular-nums">{s.cantidad} × S/ {s.precioUnitario.toFixed(2)}</p>
-                                        <p className="text-sm font-bold text-gray-900 tabular-nums">S/ {s.total.toFixed(2)}</p>
+                    <div className="rounded-lg border border-gray-200 overflow-hidden">
+                        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 px-2.5 py-1.5 bg-gray-100 text-[10px] font-bold text-gray-500 uppercase tracking-wide">
+                            <span>Servicio</span><span className="text-right">Cant.</span><span className="text-right">P. Unit</span><span className="text-right">Total</span>
+                        </div>
+                        <div className="max-h-40 overflow-y-auto divide-y divide-gray-100">
+                            {detalleServicios.map((s, idx) => (
+                                <div key={idx} className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 items-center px-2.5 py-2 text-sm bg-white">
+                                    <div className="min-w-0 flex items-center gap-1.5">
+                                        <span className="font-medium text-gray-900 truncate">{s.nombre}</span>
+                                        {s.nombreOriginal && (
+                                            <span title={`Nombre original: ${s.nombreOriginal}`} className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-indigo-100 text-indigo-700">✏️ Editado</span>
+                                        )}
                                     </div>
+                                    <span className="text-gray-500 tabular-nums text-right">{s.cantidad}</span>
+                                    <span className="text-gray-500 tabular-nums text-right">S/{s.precioUnitario.toFixed(2)}</span>
+                                    <span className="font-bold text-gray-900 tabular-nums text-right">S/{s.total.toFixed(2)}</span>
                                 </div>
-                                {s.nombreOriginal && (
-                                    <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">
-                                        ✏️ Editado de "{s.nombreOriginal}"
-                                    </span>
-                                )}
-                            </div>
-                        ))}
+                            ))}
+                        </div>
                     </div>
                 </div>
             )}
@@ -93,13 +97,18 @@ const ResumenDetalle = ({ resumen }) => {
             {detallePromociones.length > 0 && (
                 <div>
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Promociones aplicadas</p>
-                    <div className="space-y-1.5">
-                        {detallePromociones.map((p, idx) => (
-                            <div key={idx} className="flex items-center justify-between text-sm p-2 bg-rose-50 rounded-lg">
-                                <span className="font-medium text-rose-900">{p.nombre}</span>
-                                <span className="text-rose-700 font-semibold">x{p.cantidad}</span>
-                            </div>
-                        ))}
+                    <div className="rounded-lg border border-rose-200 overflow-hidden">
+                        <div className="grid grid-cols-[1fr_auto] gap-x-3 px-2.5 py-1.5 bg-rose-100 text-[10px] font-bold text-rose-700 uppercase tracking-wide">
+                            <span>Promoción</span><span className="text-right">Vendidas</span>
+                        </div>
+                        <div className="divide-y divide-rose-100">
+                            {detallePromociones.map((p, idx) => (
+                                <div key={idx} className="grid grid-cols-[1fr_auto] gap-x-3 items-center px-2.5 py-2 text-sm bg-rose-50">
+                                    <span className="font-medium text-rose-900 truncate">{p.nombre}</span>
+                                    <span className="text-rose-700 font-bold tabular-nums text-right">x{p.cantidad}</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             )}
