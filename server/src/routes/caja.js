@@ -61,11 +61,24 @@ const calcularResumenTurno = async (turno) => {
   const serviciosMap = new Map();
   const promocionesMap = new Map();
 
+  // Suma el monto de una línea a la entrada de promoción correspondiente,
+  // sin importar si la línea que llega primero es el DESC-PROMO (negativo) o
+  // el producto/servicio de la promo (positivo) — converge al neto igual.
+  const sumarMontoPromo = (nombrePromo, monto, cantidadExtra = 0) => {
+    const prev = promocionesMap.get(nombrePromo);
+    if (prev) {
+      prev.cantidad += cantidadExtra;
+      prev.monto = round2(prev.monto + monto);
+    } else {
+      promocionesMap.set(nombrePromo, { cantidad: cantidadExtra, monto: round2(monto) });
+    }
+  };
+
   for (const it of itemsTurno) {
     if (it.codigo_producto === 'DESC-PROMO') {
       promocionesVendidas += it.cantidad;
       const nombre = it.promoNombre || 'Promoción';
-      promocionesMap.set(nombre, (promocionesMap.get(nombre) || 0) + it.cantidad);
+      sumarMontoPromo(nombre, Number(it.total), it.cantidad);
     } else if (it.servicioId) {
       serviciosRealizados += it.cantidad;
       // Si el nombre facturado no coincide con el actual de la ficha, es porque
@@ -103,6 +116,9 @@ const calcularResumenTurno = async (turno) => {
           promoNombre: it.promoNombre || null,
         });
       }
+      // El monto de la promo es neto: precio lleno del producto (+) menos el
+      // descuento de la línea DESC-PROMO (-) — se suman ambas partes acá.
+      if (it.promoNombre) sumarMontoPromo(it.promoNombre, Number(it.total));
     }
   }
 
@@ -117,6 +133,9 @@ const calcularResumenTurno = async (turno) => {
             select: {
               cantidad: true,
               subtotal: true,
+              precioUnitario: true,
+              productoId: true,
+              servicioId: true,
               producto: { select: { nombre: true } },
               servicio: { select: { nombre: true } },
             },
@@ -127,49 +146,74 @@ const calcularResumenTurno = async (turno) => {
 
   let unidadesDevueltas = 0;
   let montoDevuelto = 0;
-  const devolucionesPorNombre = new Map(); // nombre -> { cantidad, monto } — para cruzar con cada línea
-  const devolucionesMap = new Map(); // para la tabla propia de devoluciones
+  let medicamentosDevueltos = 0;
+  let serviciosDevueltos = 0;
+  // Clave nombre+precio (no solo nombre) para no cruzar mal una devolución
+  // cuando el mismo producto se vendió a dos precios distintos en el turno
+  // (por ejemplo, una vez suelto y otra vez dentro de una promoción).
+  const devolucionesPorClave = new Map(); // "nombre|precio" -> { cantidad, monto, motivos:Set }
+  const devolucionesMap = new Map(); // para la tabla propia de devoluciones (agrupada solo por nombre)
 
   for (const dev of devolucionesTurno) {
     for (const di of dev.devolucionitem) {
       const nombre = di.producto?.nombre || di.servicio?.nombre || 'Ítem';
       const monto = Number(di.subtotal);
+      const precio = Number(di.precioUnitario);
       unidadesDevueltas += di.cantidad;
       montoDevuelto = round2(montoDevuelto + monto);
+      if (di.productoId) medicamentosDevueltos += di.cantidad;
+      else if (di.servicioId) serviciosDevueltos += di.cantidad;
 
-      const porNombre = devolucionesPorNombre.get(nombre);
-      if (porNombre) {
-        porNombre.cantidad += di.cantidad;
-        porNombre.monto = round2(porNombre.monto + monto);
+      const clave = `${nombre}|${precio}`;
+      const porClave = devolucionesPorClave.get(clave);
+      if (porClave) {
+        porClave.cantidad += di.cantidad;
+        porClave.monto = round2(porClave.monto + monto);
+        if (dev.motivo) porClave.motivos.add(dev.motivo);
       } else {
-        devolucionesPorNombre.set(nombre, { cantidad: di.cantidad, monto });
+        devolucionesPorClave.set(clave, { cantidad: di.cantidad, monto, motivos: new Set(dev.motivo ? [dev.motivo] : []) });
       }
 
       const prevFila = devolucionesMap.get(nombre);
       if (prevFila) {
         prevFila.cantidad += di.cantidad;
         prevFila.monto = round2(prevFila.monto + monto);
+        if (dev.motivo) prevFila.motivos.add(dev.motivo);
       } else {
-        devolucionesMap.set(nombre, { nombre, cantidad: di.cantidad, monto });
+        devolucionesMap.set(nombre, { nombre, cantidad: di.cantidad, monto, motivos: new Set(dev.motivo ? [dev.motivo] : []) });
       }
     }
   }
 
-  // Cruza cada medicamento/servicio con su devolución (si tuvo) por nombre.
+  // Cruza cada medicamento/servicio con su devolución (si tuvo) por nombre+precio.
   const conDevolucion = (lista) => lista.map((item) => {
-    const dev = devolucionesPorNombre.get(item.nombre);
-    return dev ? { ...item, cantidadDevuelta: dev.cantidad, montoDevuelto: dev.monto } : item;
+    const dev = devolucionesPorClave.get(`${item.nombre}|${item.precioUnitario}`);
+    return dev
+      ? { ...item, cantidadDevuelta: dev.cantidad, montoDevuelto: dev.monto, motivoDevolucion: Array.from(dev.motivos).join('; ') || null }
+      : item;
   });
+
+  const detalleDevoluciones = Array.from(devolucionesMap.values())
+    .map(({ motivos, ...d }) => ({ ...d, motivo: Array.from(motivos).join('; ') || null }))
+    .sort((a, b) => b.monto - a.monto);
 
   return {
     montoVentas,
     montoEgresos,
     montoFinal,
-    resumenVentas: { medicamentosVendidos, serviciosRealizados, promocionesVendidas, unidadesDevueltas, montoDevuelto },
+    resumenVentas: {
+      medicamentosVendidos,
+      serviciosRealizados,
+      promocionesVendidas,
+      unidadesDevueltas,
+      montoDevuelto,
+      medicamentosDevueltos,
+      serviciosDevueltos,
+    },
     detalleMedicamentos: conDevolucion(Array.from(medicamentosMap.values()).sort((a, b) => b.cantidad - a.cantidad)),
     detalleServicios: conDevolucion(Array.from(serviciosMap.values()).sort((a, b) => b.cantidad - a.cantidad)),
-    detallePromociones: Array.from(promocionesMap, ([nombre, cantidad]) => ({ nombre, cantidad })).sort((a, b) => b.cantidad - a.cantidad),
-    detalleDevoluciones: Array.from(devolucionesMap.values()).sort((a, b) => b.monto - a.monto),
+    detallePromociones: Array.from(promocionesMap, ([nombre, v]) => ({ nombre, cantidad: v.cantidad, monto: v.monto })).sort((a, b) => b.cantidad - a.cantidad),
+    detalleDevoluciones,
   };
 };
 

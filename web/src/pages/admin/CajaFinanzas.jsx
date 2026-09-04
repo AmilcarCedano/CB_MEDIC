@@ -69,10 +69,16 @@ const ResumenDetalle = ({ resumen }) => {
                 <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
                     <p className="text-3xl font-black text-indigo-800 tabular-nums">{resumenVentas?.medicamentosVendidos ?? 0}</p>
                     <p className="text-xs text-indigo-600 font-semibold mt-1">Medicamentos vendidos</p>
+                    {resumenVentas?.medicamentosDevueltos > 0 && (
+                        <p className="text-[10px] text-red-600 font-bold mt-0.5">↩️ {resumenVentas.medicamentosDevueltos} devuelto(s)</p>
+                    )}
                 </div>
                 <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl">
                     <p className="text-3xl font-black text-amber-800 tabular-nums">{resumenVentas?.serviciosRealizados ?? 0}</p>
                     <p className="text-xs text-amber-600 font-semibold mt-1">Servicios realizados</p>
+                    {resumenVentas?.serviciosDevueltos > 0 && (
+                        <p className="text-[10px] text-red-600 font-bold mt-0.5">↩️ {resumenVentas.serviciosDevueltos} devuelto(s)</p>
+                    )}
                 </div>
                 <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl">
                     <p className="text-3xl font-black text-rose-800 tabular-nums">{resumenVentas?.promocionesVendidas ?? 0}</p>
@@ -107,7 +113,7 @@ const ResumenDetalle = ({ resumen }) => {
                                                 <span title={`Promoción: ${m.promoNombre}`} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-100 text-rose-700">🏷️ Promo</span>
                                             )}
                                             {m.cantidadDevuelta && (
-                                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-100 text-red-700">↩️ {m.cantidadDevuelta} devuelto(s) · -S/{m.montoDevuelto.toFixed(2)}</span>
+                                                <span title={m.motivoDevolucion || undefined} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-100 text-red-700">↩️ {m.cantidadDevuelta} devuelto(s) · -S/{m.montoDevuelto.toFixed(2)}</span>
                                             )}
                                         </div>
                                     }
@@ -135,7 +141,7 @@ const ResumenDetalle = ({ resumen }) => {
                                                 <span title={`Nombre original: ${s.nombreOriginal}`} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-indigo-100 text-indigo-700">✏️ Editado</span>
                                             )}
                                             {s.cantidadDevuelta && (
-                                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-100 text-red-700">↩️ {s.cantidadDevuelta} devuelto(s) · -S/{s.montoDevuelto.toFixed(2)}</span>
+                                                <span title={s.motivoDevolucion || undefined} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-red-100 text-red-700">↩️ {s.cantidadDevuelta} devuelto(s) · -S/{s.montoDevuelto.toFixed(2)}</span>
                                             )}
                                         </div>
                                     }
@@ -151,14 +157,15 @@ const ResumenDetalle = ({ resumen }) => {
                     {detallePromociones.length > 0 && (
                         <div className="rounded-xl border border-rose-200 overflow-hidden">
                             <div className="px-3 py-2 bg-rose-100"><p className="text-xs font-bold uppercase tracking-wide text-rose-700">Promociones aplicadas</p></div>
-                            <div className="grid grid-cols-[1fr_auto] gap-x-3 px-3 py-1.5 bg-rose-50 text-[10px] font-bold text-rose-600 uppercase tracking-wide">
-                                <span>Promoción</span><span className="text-right">Vendidas</span>
+                            <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-3 py-1.5 bg-rose-50 text-[10px] font-bold text-rose-600 uppercase tracking-wide">
+                                <span>Promoción</span><span className="text-right">Vendidas</span><span className="text-right">Monto neto</span>
                             </div>
                             <div className="divide-y divide-rose-100 max-h-40 overflow-y-auto">
                                 {detallePromociones.map((p, idx) => (
-                                    <div key={idx} className="grid grid-cols-[1fr_auto] gap-x-3 items-center px-3 py-2.5 text-sm bg-white">
+                                    <div key={idx} className="grid grid-cols-[1fr_auto_auto] gap-x-3 items-center px-3 py-2.5 text-sm bg-white">
                                         <span className="font-medium text-rose-900 truncate">{p.nombre}</span>
-                                        <span className="text-rose-700 font-bold tabular-nums text-right">x{p.cantidad}</span>
+                                        <span className="text-rose-700 tabular-nums text-right">x{p.cantidad}</span>
+                                        <span className="text-rose-700 font-bold tabular-nums text-right">S/{(p.monto ?? 0).toFixed(2)}</span>
                                     </div>
                                 ))}
                             </div>
@@ -173,7 +180,7 @@ const ResumenDetalle = ({ resumen }) => {
                             </div>
                             <div className="divide-y divide-red-100 max-h-40 overflow-y-auto">
                                 {detalleDevoluciones.map((d, idx) => (
-                                    <div key={idx} className="grid grid-cols-[1fr_auto_auto] gap-x-3 items-center px-3 py-2.5 text-sm bg-white">
+                                    <div key={idx} title={d.motivo || undefined} className="grid grid-cols-[1fr_auto_auto] gap-x-3 items-center px-3 py-2.5 text-sm bg-white">
                                         <span className="font-medium text-red-900 truncate">{d.nombre}</span>
                                         <span className="text-red-700 tabular-nums text-right">x{d.cantidad}</span>
                                         <span className="text-red-700 font-bold tabular-nums text-right">-S/{d.monto.toFixed(2)}</span>
