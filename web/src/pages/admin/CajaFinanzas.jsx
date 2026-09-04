@@ -215,7 +215,10 @@ const CajaFinanzas = ({ farmacia, user }) => {
         if (!turnoActivo) return;
         try {
             const desde = encodeURIComponent(turnoActivo.fechaApertura);
-            const { data } = await api.get(`/sales?desde=${desde}`);
+            // propio=1: esta es "Mi Caja Personal", siempre solo lo que vendió
+            // el usuario actual (antes, un ADMIN veía acá las ventas de toda la
+            // farmacia porque el backend solo aplicaba ese filtro a VENDEDOR).
+            const { data } = await api.get(`/sales?desde=${desde}&propio=1`);
             // El server ya filtra desde fechaApertura; solo excluir las posteriores al cierre
             const ventasTurno = turnoActivo.fechaCierre
                 ? data.filter(v => new Date(v.fecha_emision) <= new Date(turnoActivo.fechaCierre))

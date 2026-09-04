@@ -33,7 +33,13 @@ router.get('/', async (req, res) => {
       farmaciaId: currentFarmaciaId,
     };
 
-    if (currentUserRole === 'VENDEDOR') {
+    // "Mi Caja Personal" pide explícitamente solo las ventas del usuario actual
+    // (?propio=1), sin importar el rol. Antes esto SOLO pasaba automático para
+    // VENDEDOR — un ADMIN viendo su propia caja terminaba viendo las ventas de
+    // TODA la farmacia (de cualquier vendedor), porque este where no lo filtraba.
+    // GestionVentas.jsx (panel de administración de ventas) sigue sin mandar
+    // este parámetro a propósito: ahí el admin sí debe ver todas las ventas.
+    if (currentUserRole === 'VENDEDOR' || req.query.propio === '1') {
       whereClause.usuarioId = currentUsuarioId;
       // ?desde=ISO_DATE permite obtener ventas desde la apertura del turno sin importar antigüedad
       if (req.query.desde) {
@@ -41,7 +47,7 @@ router.get('/', async (req, res) => {
         if (!isNaN(desde.getTime())) {
           whereClause.fecha_emision = { gte: desde };
         }
-      } else {
+      } else if (currentUserRole === 'VENDEDOR') {
         whereClause.fecha_emision = {
           gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
         };
