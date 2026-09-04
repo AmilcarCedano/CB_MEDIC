@@ -6,6 +6,58 @@ const { logAudit } = require('../lib/audit');
 const { requireAdmin } = require('../middleware/auth');
 const { round2 } = require('../lib/money');
 
+// Calcula ventas + resumen (medicamentos/servicios/promociones) de un turno, sin
+// modificar nada. Se usa tanto para la vista previa (GET, antes de decidir cerrar)
+// como para el cierre real (POST), así ambas siempre muestran el mismo número.
+const calcularResumenTurno = async (turno) => {
+  const comprobantesParaCierre = await prisma.comprobante.findMany({
+    where: {
+      farmaciaId: turno.farmaciaId,
+      usuarioId: turno.usuarioId,
+      fecha_emision: { gte: turno.fechaApertura },
+      estado_sunat: { not: 'ANULADO' },
+    },
+    include: { devolucion: { select: { totalDevuelto: true } } },
+  });
+  const montoVentas = comprobantesParaCierre.reduce((sum, c) => {
+    const devuelto = round2(c.devolucion.reduce((d, dev) => d + Number(dev.totalDevuelto || 0), 0));
+    return round2(sum + Number(c.total) - devuelto);
+  }, 0);
+  const montoEgresos = round2(Number(turno.montoEgresos) || 0);
+  const montoFinal = round2(Number(turno.montoInicial) + montoVentas - montoEgresos);
+
+  // Resumen de lo vendido en el turno: cuántos medicamentos, servicios y
+  // promociones. Se cuenta por unidades (cantidad), no por líneas de comprobante,
+  // y sobre las mismas comprobantes usadas para calcular montoVentas (no se
+  // netea contra devoluciones — es un conteo de lo emitido en el turno).
+  const itemsTurno = comprobantesParaCierre.length
+    ? await prisma.comprobanteitem.findMany({
+        where: { comprobanteId: { in: comprobantesParaCierre.map((c) => c.id) } },
+        select: { cantidad: true, productoId: true, servicioId: true, codigo_producto: true },
+      })
+    : [];
+
+  let medicamentosVendidos = 0;
+  let serviciosRealizados = 0;
+  let promocionesVendidas = 0;
+  for (const it of itemsTurno) {
+    if (it.codigo_producto === 'DESC-PROMO') {
+      promocionesVendidas += it.cantidad;
+    } else if (it.servicioId) {
+      serviciosRealizados += it.cantidad;
+    } else if (it.productoId) {
+      medicamentosVendidos += it.cantidad;
+    }
+  }
+
+  return {
+    montoVentas,
+    montoEgresos,
+    montoFinal,
+    resumenVentas: { medicamentosVendidos, serviciosRealizados, promocionesVendidas },
+  };
+};
+
 // SECURITY: farmaciaId, userId y userRole ya vienen del middleware authenticate (JWT verificado)
 // NO usar req.headers['x-farmacia-id'] ya que pueden ser suplantados
 // El middleware authenticate es responsable de validar y establecer estos valores
@@ -106,6 +158,26 @@ router.post('/abrir-turno', async (req, res) => {
   }
 });
 
+// GET /caja/turno/:id/resumen - Vista previa del resumen de cierre, SIN cerrar nada.
+// Para que el cajero pueda ver cuánto lleva vendido antes de decidir si cierra la caja.
+router.get('/turno/:id/resumen', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { farmaciaId } = req;
+
+    const turno = await prisma.turnocaja.findFirst({
+      where: { id: parseInt(id), farmaciaId },
+    });
+    if (!turno) return res.status(404).json({ error: 'Turno no encontrado' });
+
+    const { montoVentas, montoEgresos, montoFinal, resumenVentas } = await calcularResumenTurno(turno);
+    return res.json({ montoVentas, montoEgresos, montoFinal, resumenVentas });
+  } catch (error) {
+    console.error('Error al calcular resumen de turno:', error);
+    res.status(500).json({ error: 'No se pudo calcular el resumen del turno' });
+  }
+});
+
 // POST /caja/cerrar-turno/:id - Cerrar un turno
 router.post('/cerrar-turno/:id', async (req, res) => {
   try {
@@ -160,47 +232,8 @@ router.post('/cerrar-turno/:id', async (req, res) => {
       return res.status(400).json({ error: 'El turno ya está cerrado' });
     }
 
-    // Calcular ventas netas desde comprobantes reales (incluye retroactivos)
-    const comprobantesParaCierre = await prisma.comprobante.findMany({
-      where: {
-        farmaciaId: turno.farmaciaId,
-        usuarioId: turno.usuarioId,
-        fecha_emision: { gte: turno.fechaApertura },
-        estado_sunat: { not: 'ANULADO' },
-      },
-      include: { devolucion: { select: { totalDevuelto: true } } },
-    });
-    const montoVentas = comprobantesParaCierre.reduce((sum, c) => {
-      const devuelto = round2(c.devolucion.reduce((d, dev) => d + Number(dev.totalDevuelto || 0), 0));
-      return round2(sum + Number(c.total) - devuelto);
-    }, 0);
-    const montoEgresos = round2(Number(turno.montoEgresos) || 0);
-    const montoFinal = round2(Number(turno.montoInicial) + montoVentas - montoEgresos);
-
-    // Resumen de lo vendido en el turno: cuántos medicamentos, servicios y
-    // promociones. Se cuenta por unidades (cantidad), no por líneas de comprobante,
-    // y sobre las mismas comprobantes usadas para calcular montoVentas (no se
-    // netea contra devoluciones — es un conteo de lo emitido en el turno).
-    const itemsTurno = comprobantesParaCierre.length
-      ? await prisma.comprobanteitem.findMany({
-          where: { comprobanteId: { in: comprobantesParaCierre.map((c) => c.id) } },
-          select: { cantidad: true, productoId: true, servicioId: true, codigo_producto: true },
-        })
-      : [];
-
-    let medicamentosVendidos = 0;
-    let serviciosRealizados = 0;
-    let promocionesVendidas = 0;
-    for (const it of itemsTurno) {
-      if (it.codigo_producto === 'DESC-PROMO') {
-        promocionesVendidas += it.cantidad;
-      } else if (it.servicioId) {
-        serviciosRealizados += it.cantidad;
-      } else if (it.productoId) {
-        medicamentosVendidos += it.cantidad;
-      }
-    }
-    const resumenVentas = { medicamentosVendidos, serviciosRealizados, promocionesVendidas };
+    const { montoVentas, montoEgresos, montoFinal, resumenVentas } = await calcularResumenTurno(turno);
+    const { medicamentosVendidos, serviciosRealizados, promocionesVendidas } = resumenVentas;
 
     const turnoCerrado = await prisma.turnocaja.update({
       where: { id: turno.id },

@@ -34,6 +34,9 @@ const CajaFinanzas = ({ farmacia, user }) => {
     const [motivoEgreso, setMotivoEgreso] = useState('');
     const [observacionesCierre, setObservacionesCierre] = useState({ observaciones: '', password: '' });
     const [cierreResumen, setCierreResumen] = useState(null);
+    const [showChoiceCierre, setShowChoiceCierre] = useState(false);
+    const [previewResumen, setPreviewResumen] = useState(null);
+    const [loadingPreview, setLoadingPreview] = useState(false);
     const [historialTurnos, setHistorialTurnos] = useState([]);
     const [, setEgresos] = useState([]);
     const [showDetallesModal, setShowDetallesModal] = useState(false);
@@ -145,6 +148,19 @@ const CajaFinanzas = ({ farmacia, user }) => {
             fetchTurnoActivo();
         } catch (error) {
             alert(error.response?.data?.error || 'Error al registrar egreso');
+        }
+    };
+
+    const handleVerResumenPreview = async () => {
+        setShowChoiceCierre(false);
+        setLoadingPreview(true);
+        try {
+            const { data } = await api.get(`/caja/turno/${turnoActivo.id}/resumen`, { headers: { 'x-farmacia-id': farmacia.id } });
+            setPreviewResumen(data);
+        } catch (error) {
+            alert(error.response?.data?.error || 'No se pudo cargar el resumen del turno');
+        } finally {
+            setLoadingPreview(false);
         }
     };
 
@@ -283,7 +299,7 @@ const CajaFinanzas = ({ farmacia, user }) => {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     <Button variant="outline" onClick={() => setShowModalEgreso(true)} className="w-full"><TrendingDown size={20} className="mr-2" />Egreso</Button>
-                    <Button variant="danger" onClick={() => setShowModalCierre(true)} className="w-full"><Lock size={20} className="mr-2" />Cerrar Caja</Button>
+                    <Button variant="danger" onClick={() => setShowChoiceCierre(true)} className="w-full"><Lock size={20} className="mr-2" />Cerrar Caja</Button>
                 </div>
                 <Card className="!p-4 sm:!p-6 rounded-2xl border border-gray-100 shadow-sm">
                     <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><TrendingUp size={18} className="text-indigo-600" />Ventas del Turno ({ventas.length})</h3>
@@ -463,6 +479,51 @@ const CajaFinanzas = ({ farmacia, user }) => {
                 </div>
             )}
             {showDetallesModal && <ModalDetalles />}
+
+            {showChoiceCierre && (
+                <Modal isOpen={showChoiceCierre} onClose={() => setShowChoiceCierre(false)} title="Cerrar Caja">
+                    <div className="space-y-4">
+                        <p className="text-sm text-gray-600">¿Deseas cerrar la caja directo, o prefieres ver primero el resumen del turno (ventas, medicamentos, servicios y promociones)?</p>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <Button variant="outline" className="flex-1 w-full" disabled={loadingPreview} onClick={handleVerResumenPreview}>
+                                {loadingPreview ? 'Cargando...' : 'Ver resumen primero'}
+                            </Button>
+                            <Button variant="danger" className="flex-1 w-full" onClick={() => { setShowChoiceCierre(false); setShowModalCierre(true); }}>
+                                Cerrar directo
+                            </Button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
+            {previewResumen && (
+                <Modal isOpen={!!previewResumen} onClose={() => setPreviewResumen(null)} title="Resumen del Turno (antes de cerrar)">
+                    <div className="space-y-4">
+                        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-center">
+                            <p className="text-xs text-emerald-700 font-medium uppercase tracking-wide">Total en caja hasta el momento</p>
+                            <p className="text-3xl font-bold text-emerald-800 tabular-nums">S/ {parseFloat(previewResumen.montoFinal || 0).toFixed(2)}</p>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
+                                <p className="text-2xl font-bold text-indigo-800 tabular-nums">{previewResumen.resumenVentas?.medicamentosVendidos ?? 0}</p>
+                                <p className="text-[11px] text-indigo-600 font-medium mt-1">Medicamentos vendidos</p>
+                            </div>
+                            <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                                <p className="text-2xl font-bold text-amber-800 tabular-nums">{previewResumen.resumenVentas?.serviciosRealizados ?? 0}</p>
+                                <p className="text-[11px] text-amber-600 font-medium mt-1">Servicios realizados</p>
+                            </div>
+                            <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl">
+                                <p className="text-2xl font-bold text-rose-800 tabular-nums">{previewResumen.resumenVentas?.promocionesVendidas ?? 0}</p>
+                                <p className="text-[11px] text-rose-600 font-medium mt-1">Promociones vendidas</p>
+                            </div>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2">
+                            <Button variant="secondary" className="flex-1 w-full" onClick={() => setPreviewResumen(null)}>Seguir vendiendo</Button>
+                            <Button variant="danger" className="flex-1 w-full" onClick={() => { setPreviewResumen(null); setShowModalCierre(true); }}>Cerrar Caja</Button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
 
             {cierreResumen && (
                 <Modal isOpen={!!cierreResumen} onClose={() => setCierreResumen(null)} title="Turno Cerrado — Resumen del Día">
